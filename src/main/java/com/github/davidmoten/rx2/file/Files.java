@@ -104,7 +104,7 @@ public final class Files {
         Preconditions.checkNotNull(file);
         return sampleModifyOrOverflowEventsOnly(events, sampleTimeMs)
                 // tail file triggered by events
-                .lift(new OperatorFileTailer(file, startPosition, chunkSize));
+                .compose(x -> new FlowableFileTailer(x, file, startPosition, chunkSize));
     }
 
     /**
