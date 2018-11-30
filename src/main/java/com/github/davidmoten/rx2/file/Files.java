@@ -15,8 +15,6 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import com.github.davidmoten.guavamini.Preconditions;
-import com.github.davidmoten.rx.internal.operators.OnSubscribeWatchServiceEvents;
-import com.github.davidmoten.rx.internal.operators.OperatorFileTailer;
 import com.github.davidmoten.rx.util.BackpressureStrategy;
 
 import io.reactivex.Flowable;
@@ -156,8 +154,8 @@ public final class Files {
         Preconditions.checkNotNull(file);
         Preconditions.checkNotNull(charset);
         Preconditions.checkNotNull(events);
-        return toLines(events.lift(new OperatorFileTailer(file, startPosition, chunkSize)).onBackpressureBuffer(),
-                charset);
+        return toLines(events.compose(x -> new FlowableFileTailer(x, file, startPosition, chunkSize)) //
+                .onBackpressureBuffer(), charset);
     }
 
     /**
@@ -187,8 +185,8 @@ public final class Files {
         Preconditions.checkNotNull(scheduler);
         Preconditions.checkNotNull(pollDurationUnit);
         Preconditions.checkNotNull(backpressureStrategy);
-        Flowable<WatchEvent<?>> o = Flowable.create(new OnSubscribeWatchServiceEvents(watchService, scheduler,
-                pollDuration, pollDurationUnit, pollInterval, pollIntervalUnit));
+        Flowable<WatchEvent<?>> o = new FlowableWatchServiceEvents(watchService, scheduler, pollDuration,
+                pollDurationUnit, pollInterval, pollIntervalUnit);
         if (backpressureStrategy == BackpressureStrategy.BUFFER) {
             return o.onBackpressureBuffer();
         } else if (backpressureStrategy == BackpressureStrategy.DROP)
@@ -208,7 +206,7 @@ public final class Files {
      * @return Flowable of watch events from the watch service
      */
     public final static Flowable<WatchEvent<?>> from(WatchService watchService) {
-        return from(watchService, rx.schedulers.Schedulers.trampoline(), Long.MAX_VALUE, TimeUnit.MILLISECONDS, 0,
+        return from(watchService, Schedulers.trampoline(), Long.MAX_VALUE, TimeUnit.MILLISECONDS, 0,
                 TimeUnit.SECONDS, BackpressureStrategy.BUFFER);
     }
 
