@@ -1,7 +1,7 @@
 rxjava2-file
 ===========
-<a href="https://travis-ci.org/davidmoten/rxjava2-file"><img src="https://travis-ci.org/davidmoten/rxjava-file.svg"/></a><br/>
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.github.davidmoten/rxjava2-file/badge.svg?style=flat)](https://maven-badges.herokuapp.com/maven-central/com.github.davidmoten/rxjava-file)
+<a href="https://travis-ci.org/davidmoten/rxjava2-file"><img src="https://travis-ci.org/davidmoten/rxjava2-file.svg"/></a><br/>
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.github.davidmoten/rxjava2-file/badge.svg?style=flat)](https://maven-badges.herokuapp.com/maven-central/com.github.davidmoten/rxjava2-file)
 
 Status: *pre-alpha (migration work in progress)*
 
@@ -13,11 +13,9 @@ Observable utilities for files:
 * or trigger tail updates using any Observable
 * stream ```WatchEvent```s from a ```WatchService```
 * backpressure support
-* tested on Linux and Windows 8 (not OSX, help appreciated!)
+* tested on Linux 
 
-[Release Notes](RELEASE_NOTES.md)
-
-Maven site reports are [here](http://davidmoten.github.io/rxjava2-file/index.html) including [javadoc](http://davidmoten.github.io/rxjava-file/apidocs/index.html).
+Maven site reports TODO 
 
 Getting started
 ----------------
