@@ -102,3 +102,6 @@ Flowable<WatchEvent<?>> events =
     .pollInterval(1, TimeUnit.MINUTES)
     .build();
 ```
+
+## OSX
+Apparently the WatchService can be slow on OSX (see [here](https://stackoverflow.com/questions/9588737/is-java-7-watchservice-slow-for-anyone-else)). Note that the first example above shows how to pass a special `WatchEvent.Modifier` which some find has a beneficial effect.
