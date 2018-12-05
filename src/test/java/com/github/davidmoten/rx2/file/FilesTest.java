@@ -56,4 +56,10 @@ public class FilesTest {
         ts.assertValues(0L, 1L).assertNotTerminated();
     }
 
+    public static void main(String[] args) throws InterruptedException {
+        Files.tailer().file("/home/dxm/ais.txt").tailText() //
+                .doOnNext(x -> System.out.println(x)).subscribe();
+        Thread.sleep(10000000L);
+    }
+
 }

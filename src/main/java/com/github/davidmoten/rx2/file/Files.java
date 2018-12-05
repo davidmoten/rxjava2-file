@@ -63,9 +63,10 @@ public final class Files {
      *            know what to put here.
      * @return Flowable of byte arrays
      */
-    public final static Flowable<byte[]> tailFile(File file, long startPosition, long sampleTimeMs, int chunkSize) {
+    public final static Flowable<byte[]> tailBytes(File file, long startPosition, long sampleTimeMs, int chunkSize) {
         Preconditions.checkNotNull(file);
-        Flowable<Object> events = events(file, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_MODIFY,
+        Flowable<Object> events = events(file, StandardWatchEventKinds.ENTRY_CREATE,
+                StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY,
                 StandardWatchEventKinds.OVERFLOW)
                         // don't care about the event details, just that there
                         // is one
@@ -73,7 +74,7 @@ public final class Files {
                         // get lines once on subscription so we tail the lines
                         // in the file at startup
                         .startWith(new Object());
-        return tailFile(file, startPosition, sampleTimeMs, chunkSize, events);
+        return tailBytes(file, startPosition, sampleTimeMs, chunkSize, events);
     }
 
     /**
@@ -101,55 +102,12 @@ public final class Files {
      *            {@link Flowable#interval(long, TimeUnit)} for example.
      * @return Flowable of byte arrays
      */
-    public final static Flowable<byte[]> tailFile(File file, long startPosition, long sampleTimeMs, int chunkSize,
+    public final static Flowable<byte[]> tailBytes(File file, long startPosition, long sampleTimeMs, int chunkSize,
             Flowable<?> events) {
         Preconditions.checkNotNull(file);
         return sampleModifyOrOverflowEventsOnly(events, sampleTimeMs)
                 // tail file triggered by events
                 .compose(x -> eventsToBytes(events, file, startPosition, chunkSize));
-    }
-
-    private static final class State {
-        long position;
-    }
-
-    private static Flowable<byte[]> eventsToBytes(Flowable<?> events, File file, long startPosition, int chunkSize) {
-        return Flowable.defer(() -> {
-            State state = new State();
-            state.position = startPosition;
-            return events.flatMap(event -> eventToBytes(event, file, state, chunkSize));
-        });
-    }
-
-    private static Flowable<byte[]> eventToBytes(Object event, File file, State state, int chunkSize) {
-        if (event instanceof WatchEvent) {
-            WatchEvent<?> w = (WatchEvent<?>) event;
-            String kind = w.kind().name();
-            if (kind.equals(StandardWatchEventKinds.ENTRY_CREATE.name())) {
-                // if file has just been created then start from the start of the new file
-                state.position = 0;
-            } else if (kind.equals(StandardWatchEventKinds.ENTRY_DELETE.name())) {
-                return Flowable.error(new IOException("file has been deleted"));
-            }
-            // we hope that ENTRY_CREATE and ENTRY_DELETE events never get wrapped up into
-            // ENTRY_OVERFLOW!
-        }
-        long length = file.length();
-        if (length > state.position) {
-            // apply using method to ensure fis is closed on
-            // termination or unsubscription
-            return Flowable.using( //
-                    () -> new FileInputStream(file), //
-                    fis -> {
-                        fis.skip(state.position);
-                        return Bytes.from(fis, chunkSize) //
-                                .doOnNext(x -> state.position += x.length);
-                    }, //
-                    fis -> fis.close(), //
-                    true);
-        } else {
-            return Flowable.empty();
-        }
     }
 
     /**
@@ -171,9 +129,8 @@ public final class Files {
      *            the character set to use to decode the bytes to a string
      * @return Flowable of strings
      */
-    public final static Flowable<String> tailTextFile(File file, long startPosition, long sampleTimeMs,
-            Charset charset) {
-        return toLines(tailFile(file, startPosition, sampleTimeMs, DEFAULT_MAX_BYTES_PER_EMISSION), charset);
+    public final static Flowable<String> tailLines(File file, long startPosition, long sampleTimeMs, Charset charset) {
+        return toLines(tailBytes(file, startPosition, sampleTimeMs, DEFAULT_MAX_BYTES_PER_EMISSION), charset);
     }
 
     /**
@@ -196,7 +153,7 @@ public final class Files {
      *            {@link Flowable#interval(long, TimeUnit)} for example.
      * @return Flowable of strings
      */
-    public final static Flowable<String> tailTextFile(File file, long startPosition, int chunkSize, Charset charset,
+    public final static Flowable<String> tailLines(File file, long startPosition, int chunkSize, Charset charset,
             Flowable<?> events) {
         Preconditions.checkNotNull(file);
         Preconditions.checkNotNull(charset);
@@ -342,15 +299,6 @@ public final class Files {
         return watchService;
     }
 
-    private final static Path getBasePath(final File file) {
-        final Path path;
-        if (file.exists() && file.isDirectory())
-            path = Paths.get(file.toURI());
-        else
-            path = Paths.get(file.getParentFile().toURI());
-        return path;
-    }
-
     /**
      * Returns true if and only if the path corresponding to a WatchEvent represents
      * the given file. This will be the case for Create, Modify, Delete events.
@@ -389,13 +337,8 @@ public final class Files {
         return com.github.davidmoten.rx2.Strings.split(com.github.davidmoten.rx2.Strings.decode(bytes, charset), "\n");
     }
 
-    private final static Function<WatchService, Flowable<WatchEvent<?>>> TO_WATCH_EVENTS = new Function<WatchService, Flowable<WatchEvent<?>>>() {
-
-        @Override
-        public Flowable<WatchEvent<?>> apply(WatchService watchService) {
-            return events(watchService);
-        }
-    };
+    private final static Function<WatchService, Flowable<WatchEvent<?>>> TO_WATCH_EVENTS = watchService -> events(
+            watchService);
 
     private static Flowable<Object> sampleModifyOrOverflowEventsOnly(Flowable<?> events, final long sampleTimeMs) {
         return events
@@ -406,34 +349,25 @@ public final class Files {
     }
 
     private static Function<GroupedFlowable<Boolean, ?>, Flowable<?>> sampleIfTrue(final long sampleTimeMs) {
-        return new Function<GroupedFlowable<Boolean, ?>, Flowable<?>>() {
-
-            @Override
-            public Flowable<?> apply(GroupedFlowable<Boolean, ?> group) {
-                // if is modify or overflow WatchEvent
-                if (group.getKey())
-                    return group.sample(sampleTimeMs, TimeUnit.MILLISECONDS);
-                else
-                    return group;
-            }
+        return group -> { // if is modify or overflow WatchEvent
+            if (group.getKey())
+                return group.sample(sampleTimeMs, TimeUnit.MILLISECONDS);
+            else
+                return group;
         };
     }
 
-    private static Function<Object, Boolean> IS_MODIFY_OR_OVERFLOW = new Function<Object, Boolean>() {
-
-        @Override
-        public Boolean apply(Object event) {
-            if (event instanceof WatchEvent) {
-                WatchEvent<?> w = (WatchEvent<?>) event;
-                String kind = w.kind().name();
-                if (kind.equals(StandardWatchEventKinds.ENTRY_MODIFY.name())
-                        || kind.equals(StandardWatchEventKinds.OVERFLOW.name())) {
-                    return true;
-                } else
-                    return false;
+    private static Function<Object, Boolean> IS_MODIFY_OR_OVERFLOW = event -> {
+        if (event instanceof WatchEvent) {
+            WatchEvent<?> w = (WatchEvent<?>) event;
+            String kind = w.kind().name();
+            if (kind.equals(StandardWatchEventKinds.ENTRY_MODIFY.name())
+                    || kind.equals(StandardWatchEventKinds.OVERFLOW.name())) {
+                return true;
             } else
                 return false;
-        }
+        } else
+            return false;
     };
 
     public static WatchEventsBuilder from(File file) {
@@ -550,8 +484,8 @@ public final class Files {
         /**
          * Specifies sampling to apply to the source Flowable (which could be very busy
          * if a lot of writes are occurring for example). Sampling is only applied to
-         * file updates (MODIFY and OVERFLOW), file creation events are always passed
-         * through. File deletion events are ignored (in fact are not requested of NIO).
+         * file updates (MODIFY and OVERFLOW), file creation and deletion events are
+         * always passed through.
          * 
          * @param sampleTimeMs
          *            sample time in ms
@@ -608,11 +542,11 @@ public final class Files {
 
         public Flowable<byte[]> tail() {
 
-            return tailFile(file, startPosition, sampleTimeMs, chunkSize, getSource());
+            return tailBytes(file, startPosition, sampleTimeMs, chunkSize, getSource());
         }
 
         public Flowable<String> tailText() {
-            return tailTextFile(file, startPosition, chunkSize, charset, getSource());
+            return tailLines(file, startPosition, chunkSize, charset, getSource());
         }
 
         private Flowable<?> getSource() {
@@ -624,6 +558,58 @@ public final class Files {
 
         }
 
+    }
+
+    private static final class State {
+        long position;
+    }
+
+    private static Flowable<byte[]> eventsToBytes(Flowable<?> events, File file, long startPosition, int chunkSize) {
+        return Flowable.defer(() -> {
+            State state = new State();
+            state.position = startPosition;
+            return events.flatMap(event -> eventToBytes(event, file, state, chunkSize));
+        });
+    }
+
+    private static Flowable<byte[]> eventToBytes(Object event, File file, State state, int chunkSize) {
+        if (event instanceof WatchEvent) {
+            WatchEvent<?> w = (WatchEvent<?>) event;
+            String kind = w.kind().name();
+            if (kind.equals(StandardWatchEventKinds.ENTRY_CREATE.name())) {
+                // if file has just been created then start from the start of the new file
+                state.position = 0;
+            } else if (kind.equals(StandardWatchEventKinds.ENTRY_DELETE.name())) {
+                return Flowable.error(new IOException("file has been deleted"));
+            }
+            // we hope that ENTRY_CREATE and ENTRY_DELETE events never get wrapped up into
+            // ENTRY_OVERFLOW!
+        }
+        long length = file.length();
+        if (length > state.position) {
+            // apply using method to ensure fis is closed on
+            // termination or unsubscription
+            return Flowable.using( //
+                    () -> new FileInputStream(file), //
+                    fis -> {
+                        fis.skip(state.position);
+                        return Bytes.from(fis, chunkSize) //
+                                .doOnNext(x -> state.position += x.length);
+                    }, //
+                    fis -> fis.close(), //
+                    true);
+        } else {
+            return Flowable.empty();
+        }
+    }
+
+    private final static Path getBasePath(final File file) {
+        final Path path;
+        if (file.exists() && file.isDirectory())
+            path = Paths.get(file.toURI());
+        else
+            path = Paths.get(file.getParentFile().toURI());
+        return path;
     }
 
 }
