@@ -2,6 +2,7 @@
 package com.github.davidmoten.rx2.file;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Path;
@@ -17,15 +18,16 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import com.github.davidmoten.guavamini.Preconditions;
+import com.github.davidmoten.rx2.Bytes;
 
 import io.reactivex.Flowable;
 import io.reactivex.Scheduler;
 import io.reactivex.Single;
 import io.reactivex.flowables.GroupedFlowable;
+import io.reactivex.functions.Action;
 import io.reactivex.functions.Function;
 import io.reactivex.functions.Predicate;
 import io.reactivex.schedulers.Schedulers;
-import rx.functions.Action0;
 
 /**
  * Flowable utility methods related to {@link File}.
@@ -57,13 +59,13 @@ public final class Files {
      * @param chunkSize
      *            max array size of each element emitted by the Flowable. Is also
      *            used as the buffer size for reading from the file. Try
-     *            {@link FileFlowable#DEFAULT_MAX_BYTES_PER_EMISSION} if you don't s
+     *            {@link FileFlowable#DEFAULT_MAX_BYTES_PER_EMISSION} if you don't
      *            know what to put here.
      * @return Flowable of byte arrays
      */
     public final static Flowable<byte[]> tailFile(File file, long startPosition, long sampleTimeMs, int chunkSize) {
         Preconditions.checkNotNull(file);
-        Flowable<Object> events = from(file, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_MODIFY,
+        Flowable<Object> events = events(file, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_MODIFY,
                 StandardWatchEventKinds.OVERFLOW)
                         // don't care about the event details, just that there
                         // is one
@@ -104,7 +106,50 @@ public final class Files {
         Preconditions.checkNotNull(file);
         return sampleModifyOrOverflowEventsOnly(events, sampleTimeMs)
                 // tail file triggered by events
-                .compose(x -> new FlowableFileTailer(x, file, startPosition, chunkSize));
+                .compose(x -> eventsToBytes(events, file, startPosition, chunkSize));
+    }
+
+    private static final class State {
+        long position;
+    }
+
+    private static Flowable<byte[]> eventsToBytes(Flowable<?> events, File file, long startPosition, int chunkSize) {
+        return Flowable.defer(() -> {
+            State state = new State();
+            state.position = startPosition;
+            return events.flatMap(event -> eventToBytes(event, file, state, chunkSize));
+        });
+    }
+
+    private static Flowable<byte[]> eventToBytes(Object event, File file, State state, int chunkSize) {
+        if (event instanceof WatchEvent) {
+            WatchEvent<?> w = (WatchEvent<?>) event;
+            String kind = w.kind().name();
+            if (kind.equals(StandardWatchEventKinds.ENTRY_CREATE.name())) {
+                // if file has just been created then start from the start of the new file
+                state.position = 0;
+            } else if (kind.equals(StandardWatchEventKinds.ENTRY_DELETE.name())) {
+                return Flowable.error(new IOException("file has been deleted"));
+            }
+            // we hope that ENTRY_CREATE and ENTRY_DELETE events never get wrapped up into
+            // ENTRY_OVERFLOW!
+        }
+        long length = file.length();
+        if (length > state.position) {
+            // apply using method to ensure fis is closed on
+            // termination or unsubscription
+            return Flowable.using( //
+                    () -> new FileInputStream(file), //
+                    fis -> {
+                        fis.skip(state.position);
+                        return Bytes.from(fis, chunkSize) //
+                                .doOnNext(x -> state.position += x.length);
+                    }, //
+                    fis -> fis.close(), //
+                    true);
+        } else {
+            return Flowable.empty();
+        }
     }
 
     /**
@@ -156,8 +201,7 @@ public final class Files {
         Preconditions.checkNotNull(file);
         Preconditions.checkNotNull(charset);
         Preconditions.checkNotNull(events);
-        return toLines(events.compose(x -> new FlowableFileTailer(x, file, startPosition, chunkSize)) //
-                .onBackpressureBuffer(), charset);
+        return toLines(events.compose(x -> eventsToBytes(x, file, startPosition, chunkSize)), charset);
     }
 
     /**
@@ -180,7 +224,7 @@ public final class Files {
      *            backpressures strategy to apply
      * @return an Flowable of WatchEvents from watchService
      */
-    public final static Flowable<WatchEvent<?>> from(WatchService watchService, Scheduler scheduler, long interval,
+    public final static Flowable<WatchEvent<?>> events(WatchService watchService, Scheduler scheduler, long interval,
             TimeUnit unit) {
         Preconditions.checkNotNull(watchService, "watchService cannot be null");
         Preconditions.checkNotNull(scheduler, "scheduler cannot be null");
@@ -207,8 +251,8 @@ public final class Files {
      *            {@link WatchService} to generate events for
      * @return Flowable of watch events from the watch service
      */
-    public final static Flowable<WatchEvent<?>> from(WatchService watchService) {
-        return from(watchService, Schedulers.io(), DEFAULT_POLLING_INTERVAL_MS, TimeUnit.MILLISECONDS);
+    public final static Flowable<WatchEvent<?>> events(WatchService watchService) {
+        return events(watchService, Schedulers.io(), DEFAULT_POLLING_INTERVAL_MS, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -226,8 +270,8 @@ public final class Files {
      * @return Flowable of watch events
      */
     @SafeVarargs
-    public final static Flowable<WatchEvent<?>> from(final File file, Kind<?>... kinds) {
-        return from(file, null, kinds);
+    public final static Flowable<WatchEvent<?>> events(final File file, Kind<?>... kinds) {
+        return events(file, null, kinds);
     }
 
     /**
@@ -244,8 +288,8 @@ public final class Files {
      *            event kinds to watch for and emit
      * @return Flowable of watch events
      */
-    public final static Flowable<WatchEvent<?>> from(final File file, List<Kind<?>> kinds) {
-        return from(file, null, kinds.toArray(new Kind<?>[] {}));
+    public final static Flowable<WatchEvent<?>> events(final File file, List<Kind<?>> kinds) {
+        return events(file, null, kinds.toArray(new Kind<?>[] {}));
     }
 
     /**
@@ -264,13 +308,13 @@ public final class Files {
      *            kinds of watch events to register for
      * @return Flowable of watch events
      */
-    public final static Flowable<WatchEvent<?>> from(final File file, final Action0 onWatchStarted, Kind<?>... kinds) {
+    public final static Flowable<WatchEvent<?>> events(final File file, final Action onWatchStarted, Kind<?>... kinds) {
         return Flowable.using(() -> watchService(file, kinds), //
                 ws -> Single.just(ws) //
                         // when watch service created call onWatchStarted
                         .doOnSuccess(w -> {
                             if (onWatchStarted != null)
-                                onWatchStarted.call();
+                                onWatchStarted.run();
                         })
                         // emit events from the WatchService
                         .flatMapPublisher(TO_WATCH_EVENTS)
@@ -349,7 +393,7 @@ public final class Files {
 
         @Override
         public Flowable<WatchEvent<?>> apply(WatchService watchService) {
-            return from(watchService);
+            return events(watchService);
         }
     };
 
@@ -440,7 +484,7 @@ public final class Files {
             }
             return Flowable.using( //
                     () -> watchService(file, kindsCopy.toArray(new Kind<?>[] {})), //
-                    ws -> from(ws, scheduler.orElse(Schedulers.io()), pollInterval, pollIntervalUnit), // 
+                    ws -> Files.events(ws, scheduler.orElse(Schedulers.io()), pollInterval, pollIntervalUnit), //
                     ws -> ws.close(), //
                     true);
         }
@@ -459,9 +503,9 @@ public final class Files {
         private int chunkSize = 8192;
         private Charset charset = Charset.defaultCharset();
         private Flowable<?> source = null;
-        private Action0 onWatchStarted = new Action0() {
+        private Action onWatchStarted = new Action() {
             @Override
-            public void call() {
+            public void run() {
                 // do nothing
             }
         };
@@ -485,7 +529,7 @@ public final class Files {
             return file(new File(filename));
         }
 
-        public TailerBuilder onWatchStarted(Action0 onWatchStarted) {
+        public TailerBuilder onWatchStarted(Action onWatchStarted) {
             this.onWatchStarted = onWatchStarted;
             return this;
         }
@@ -573,7 +617,7 @@ public final class Files {
 
         private Flowable<?> getSource() {
             if (source == null)
-                return from(file, onWatchStarted, StandardWatchEventKinds.ENTRY_CREATE,
+                return events(file, onWatchStarted, StandardWatchEventKinds.ENTRY_CREATE,
                         StandardWatchEventKinds.ENTRY_MODIFY, StandardWatchEventKinds.OVERFLOW);
             else
                 return source;
