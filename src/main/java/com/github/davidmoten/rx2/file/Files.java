@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardWatchEventKinds;
@@ -36,45 +37,12 @@ public final class Files {
 
     private static final int DEFAULT_POLLING_INTERVAL_MS = 1000;
     public static final int DEFAULT_MAX_BYTES_PER_EMISSION = 8192;
+    public static final Kind<?>[] ALL_KINDS = new Kind<?>[] { StandardWatchEventKinds.ENTRY_CREATE,
+            StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY,
+            StandardWatchEventKinds.OVERFLOW };
 
     private Files() {
         // prevent instantiation
-    }
-
-    /**
-     * Returns an {@link Flowable} that uses NIO {@link WatchService} (and a
-     * dedicated thread) to push modified events to an Flowable that reads and
-     * reports new sequences of bytes to a subscriber. The NIO {@link WatchService}
-     * events are sampled according to <code>sampleTimeMs</code> so that lots of
-     * discrete activity on a file (for example a log file with very frequent
-     * entries) does not prompt an inordinate number of file reads to pick up
-     * changes.
-     * 
-     * @param file
-     *            the file to tail
-     * @param startPosition
-     *            start tailing file at position in bytes
-     * @param sampleTimeMs
-     *            sample time in millis
-     * @param chunkSize
-     *            max array size of each element emitted by the Flowable. Is also
-     *            used as the buffer size for reading from the file. Try
-     *            {@link FileFlowable#DEFAULT_MAX_BYTES_PER_EMISSION} if you don't
-     *            know what to put here.
-     * @return Flowable of byte arrays
-     */
-    public final static Flowable<byte[]> tailBytes(File file, long startPosition, long sampleTimeMs, int chunkSize) {
-        Preconditions.checkNotNull(file);
-        Flowable<Object> events = events(file, StandardWatchEventKinds.ENTRY_CREATE,
-                StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY,
-                StandardWatchEventKinds.OVERFLOW)
-                        // don't care about the event details, just that there
-                        // is one
-                        .cast(Object.class)
-                        // get lines once on subscription so we tail the lines
-                        // in the file at startup
-                        .startWith(new Object());
-        return tailBytes(file, startPosition, sampleTimeMs, chunkSize, events);
     }
 
     /**
@@ -102,35 +70,12 @@ public final class Files {
      *            {@link Flowable#interval(long, TimeUnit)} for example.
      * @return Flowable of byte arrays
      */
-    public final static Flowable<byte[]> tailBytes(File file, long startPosition, long sampleTimeMs, int chunkSize,
+    private static Flowable<byte[]> tailBytes(File file, long startPosition, long sampleTimeMs, int chunkSize,
             Flowable<?> events) {
         Preconditions.checkNotNull(file);
         return sampleModifyOrOverflowEventsOnly(events, sampleTimeMs)
                 // tail file triggered by events
                 .compose(x -> eventsToBytes(events, file, startPosition, chunkSize));
-    }
-
-    /**
-     * Returns an {@link Flowable} that uses NIO {@link WatchService} (and a
-     * dedicated thread) to push modified events to an Flowable that reads and
-     * reports new lines to a subscriber. The NIO WatchService MODIFY and OVERFLOW
-     * events are sampled according to <code>sampleTimeMs</code> so that lots of
-     * discrete activity on a file (for example a log file with very frequent
-     * entries) does not prompt an inordinate number of file reads to pick up
-     * changes. File create events are not sampled and are always passed through.
-     * 
-     * @param file
-     *            the file to tail
-     * @param startPosition
-     *            start tailing file at position in bytes
-     * @param sampleTimeMs
-     *            sample time in millis for MODIFY and OVERFLOW events
-     * @param charset
-     *            the character set to use to decode the bytes to a string
-     * @return Flowable of strings
-     */
-    public final static Flowable<String> tailLines(File file, long startPosition, long sampleTimeMs, Charset charset) {
-        return toLines(tailBytes(file, startPosition, sampleTimeMs, DEFAULT_MAX_BYTES_PER_EMISSION), charset);
     }
 
     /**
@@ -153,7 +98,7 @@ public final class Files {
      *            {@link Flowable#interval(long, TimeUnit)} for example.
      * @return Flowable of strings
      */
-    public final static Flowable<String> tailLines(File file, long startPosition, int chunkSize, Charset charset,
+    private static Flowable<String> tailLines(File file, long startPosition, int chunkSize, Charset charset,
             Flowable<?> events) {
         Preconditions.checkNotNull(file);
         Preconditions.checkNotNull(charset);
@@ -181,13 +126,11 @@ public final class Files {
      *            backpressures strategy to apply
      * @return an Flowable of WatchEvents from watchService
      */
-    public final static Flowable<WatchEvent<?>> events(WatchService watchService, Scheduler scheduler, long interval,
-            TimeUnit unit) {
+    private static Flowable<WatchEvent<?>> events(WatchService watchService, Scheduler scheduler, long intervalMs) {
         Preconditions.checkNotNull(watchService, "watchService cannot be null");
         Preconditions.checkNotNull(scheduler, "scheduler cannot be null");
-        Preconditions.checkArgument(interval > 0, "interval must be positive");
-        Preconditions.checkNotNull(unit, "unit cannot be null");
-        return Flowable.interval(interval, unit, scheduler) //
+        Preconditions.checkArgument(intervalMs > 0, "intervalMs must be positive");
+        return Flowable.interval(intervalMs, TimeUnit.MILLISECONDS, scheduler) //
                 .flatMap(x -> {
                     WatchKey key = watchService.poll();
                     if (key != null) {
@@ -198,55 +141,6 @@ public final class Files {
                         return Flowable.empty();
                     }
                 });
-    }
-
-    /**
-     * Returns an {@link Flowable} of {@link WatchEvent}s from a
-     * {@link WatchService}.
-     * 
-     * @param watchService
-     *            {@link WatchService} to generate events for
-     * @return Flowable of watch events from the watch service
-     */
-    public final static Flowable<WatchEvent<?>> events(WatchService watchService) {
-        return events(watchService, Schedulers.io(), DEFAULT_POLLING_INTERVAL_MS, TimeUnit.MILLISECONDS);
-    }
-
-    /**
-     * If file does not exist at subscribe time then is assumed to not be a
-     * directory. If the file is not a directory (bearing in mind the aforesaid
-     * assumption) then a {@link WatchService} is set up on its parent and
-     * {@link WatchEvent}s of the given kinds are filtered to concern the file in
-     * question. If the file is a directory then a {@link WatchService} is set up on
-     * the directory and all events are passed through of the given kinds.
-     * 
-     * @param file
-     *            file to watch
-     * @param kinds
-     *            event kinds to watch for and emit
-     * @return Flowable of watch events
-     */
-    @SafeVarargs
-    public final static Flowable<WatchEvent<?>> events(final File file, Kind<?>... kinds) {
-        return events(file, null, kinds);
-    }
-
-    /**
-     * If file does not exist at subscribe time then is assumed to not be a
-     * directory. If the file is not a directory (bearing in mind the aforesaid
-     * assumption) then a {@link WatchService} is set up on its parent and
-     * {@link WatchEvent}s of the given kinds are filtered to concern the file in
-     * question. If the file is a directory then a {@link WatchService} is set up on
-     * the directory and all events are passed through of the given kinds.
-     * 
-     * @param file
-     *            file to watch
-     * @param kinds
-     *            event kinds to watch for and emit
-     * @return Flowable of watch events
-     */
-    public final static Flowable<WatchEvent<?>> events(final File file, List<Kind<?>> kinds) {
-        return events(file, null, kinds.toArray(new Kind<?>[] {}));
     }
 
     /**
@@ -265,16 +159,10 @@ public final class Files {
      *            kinds of watch events to register for
      * @return Flowable of watch events
      */
-    public final static Flowable<WatchEvent<?>> events(final File file, final Action onWatchStarted, Kind<?>... kinds) {
+    private static Flowable<WatchEvent<?>> events(File file, Scheduler scheduler, long pollingIntervalMs,
+            Kind<?>... kinds) {
         return Flowable.using(() -> watchService(file, kinds), //
-                ws -> Single.just(ws) //
-                        // when watch service created call onWatchStarted
-                        .doOnSuccess(w -> {
-                            if (onWatchStarted != null)
-                                onWatchStarted.run();
-                        })
-                        // emit events from the WatchService
-                        .flatMapPublisher(TO_WATCH_EVENTS)
+                ws -> events(ws, scheduler, pollingIntervalMs)
                         // restrict to events related to the file
                         .filter(onlyRelatedTo(file)), //
                 ws -> ws.close(), true);
@@ -292,7 +180,7 @@ public final class Files {
      * @throws IOException
      */
     @SafeVarargs
-    public final static WatchService watchService(final File file, final Kind<?>... kinds) throws IOException {
+    private static WatchService watchService(final File file, final Kind<?>... kinds) throws IOException {
         final Path path = getBasePath(file);
         WatchService watchService = path.getFileSystem().newWatchService();
         path.register(watchService, kinds);
@@ -337,9 +225,6 @@ public final class Files {
         return com.github.davidmoten.rx2.Strings.split(com.github.davidmoten.rx2.Strings.decode(bytes, charset), "\n");
     }
 
-    private final static Function<WatchService, Flowable<WatchEvent<?>>> TO_WATCH_EVENTS = watchService -> events(
-            watchService);
-
     private static Flowable<Object> sampleModifyOrOverflowEventsOnly(Flowable<?> events, final long sampleTimeMs) {
         return events
                 // group by true if is modify or overflow, false otherwise
@@ -370,7 +255,7 @@ public final class Files {
             return false;
     };
 
-    public static WatchEventsBuilder from(File file) {
+    public static WatchEventsBuilder events(File file) {
         return new WatchEventsBuilder(file);
     }
 
@@ -418,7 +303,7 @@ public final class Files {
             }
             return Flowable.using( //
                     () -> watchService(file, kindsCopy.toArray(new Kind<?>[] {})), //
-                    ws -> Files.events(ws, scheduler.orElse(Schedulers.io()), pollInterval, pollIntervalUnit), //
+                    ws -> Files.events(ws, scheduler.orElse(Schedulers.io()), pollIntervalUnit.toMillis(pollInterval)), //
                     ws -> ws.close(), //
                     true);
         }
@@ -433,16 +318,11 @@ public final class Files {
 
         private File file = null;
         private long startPosition = 0;
-        private long sampleTimeMs = 500;
+        private long sampleTimeMs = DEFAULT_POLLING_INTERVAL_MS;
         private int chunkSize = 8192;
-        private Charset charset = Charset.defaultCharset();
-        private Flowable<?> source = null;
-        private Action onWatchStarted = new Action() {
-            @Override
-            public void run() {
-                // do nothing
-            }
-        };
+        private Charset charset = StandardCharsets.UTF_8;
+        private long pollingIntervalMs = DEFAULT_POLLING_INTERVAL_MS;
+        private Scheduler scheduler = Schedulers.io();
 
         private TailerBuilder() {
         }
@@ -461,11 +341,6 @@ public final class Files {
 
         public TailerBuilder file(String filename) {
             return file(new File(filename));
-        }
-
-        public TailerBuilder onWatchStarted(Action onWatchStarted) {
-            this.onWatchStarted = onWatchStarted;
-            return this;
         }
 
         /**
@@ -487,12 +362,19 @@ public final class Files {
          * file updates (MODIFY and OVERFLOW), file creation and deletion events are
          * always passed through.
          * 
-         * @param sampleTimeMs
-         *            sample time in ms
+         * @param sampleTime
+         *            sample time
+         * @param unit
+         *            unit for sampleTime
          * @return this
          */
-        public TailerBuilder sampleTimeMs(long sampleTimeMs) {
-            this.sampleTimeMs = sampleTimeMs;
+        public TailerBuilder sampleTime(long sampleTime, TimeUnit unit) {
+            this.sampleTimeMs = unit.toMillis(sampleTime);
+            return this;
+        }
+
+        public TailerBuilder pollingInterval(long pollingInterval, TimeUnit unit) {
+            this.pollingIntervalMs = unit.toMillis(pollingInterval);
             return this;
         }
 
@@ -509,7 +391,7 @@ public final class Files {
         }
 
         /**
-         * The charset of the file. Only used for tailing a text file.
+         * The charset of the file. Only used for tailing a text file. Default is UTF-8.
          * 
          * @param charset
          *            charset to decode with
@@ -521,7 +403,7 @@ public final class Files {
         }
 
         /**
-         * The charset of the file. Only used for tailing a text file.
+         * The charset of the file. Only used for tailing a text file. Default is UTF-8.
          * 
          * @param charset
          *            charset to decode the file with
@@ -535,27 +417,21 @@ public final class Files {
             return charset("UTF-8");
         }
 
-        public TailerBuilder source(Flowable<?> source) {
-            this.source = source;
+        public TailerBuilder scheduler(Scheduler scheduler) {
+            this.scheduler = scheduler;
             return this;
         }
 
-        public Flowable<byte[]> tail() {
-
-            return tailBytes(file, startPosition, sampleTimeMs, chunkSize, getSource());
+        public Flowable<byte[]> tailBytes() {
+            return Files.tailBytes(file, startPosition, sampleTimeMs, chunkSize, getSource());
         }
 
-        public Flowable<String> tailText() {
-            return tailLines(file, startPosition, chunkSize, charset, getSource());
+        public Flowable<String> tailLines() {
+            return Files.tailLines(file, startPosition, chunkSize, charset, getSource());
         }
 
         private Flowable<?> getSource() {
-            if (source == null)
-                return events(file, onWatchStarted, StandardWatchEventKinds.ENTRY_CREATE,
-                        StandardWatchEventKinds.ENTRY_MODIFY, StandardWatchEventKinds.OVERFLOW);
-            else
-                return source;
-
+            return events(file, scheduler, pollingIntervalMs, ALL_KINDS);
         }
 
     }

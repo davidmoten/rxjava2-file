@@ -1,9 +1,13 @@
 package com.github.davidmoten.rx2.file;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchEvent;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -16,13 +20,13 @@ import io.reactivex.subscribers.TestSubscriber;
 public class FilesTest {
 
     @Test
-    public void testEvents() throws InterruptedException, IOException {
+    public void testEventsWithTestScheduler() throws InterruptedException, IOException {
         File file = new File("target/testEvents.txt");
         file.delete();
         AtomicInteger errors = new AtomicInteger();
         TestScheduler scheduler = new TestScheduler();
         TestSubscriber<WatchEvent<?>> ts = Files //
-                .from(file) //
+                .events(file) //
                 .scheduler(scheduler) //
                 .pollInterval(1, TimeUnit.MINUTES) //
                 .events() //
@@ -56,8 +60,29 @@ public class FilesTest {
         ts.assertValues(0L, 1L).assertNotTerminated();
     }
 
+    @Test
+    public void testTailFile() throws InterruptedException, FileNotFoundException {
+        File file = new File("target/lines.txt");
+        file.delete();
+        List<String> lines = new CopyOnWriteArrayList<>();
+        TestSubscriber<String> ts = Files //
+                .tailer() //
+                .pollingInterval(50, TimeUnit.MILLISECONDS) //
+                .file(file) //
+                .tailLines() //
+                .doOnNext(x -> lines.add(x)) //
+                .test();
+        Thread.sleep(100);
+        try (PrintWriter out = new PrintWriter(file)) {
+            out.println("a");
+            out.flush();
+            Thread.sleep(100);
+            ts.assertValuesOnly("a");
+        }
+    }
+
     public static void main(String[] args) throws InterruptedException {
-        Files.tailer().file("/home/dxm/ais.txt").tailText() //
+        Files.tailer().file("/home/dxm/ais.txt").tailLines() //
                 .doOnNext(x -> System.out.println(x)).subscribe();
         Thread.sleep(10000000L);
     }
