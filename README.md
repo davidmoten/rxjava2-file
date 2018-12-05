@@ -15,7 +15,7 @@ Flowable utilities for files:
 * or trigger tail updates using any Observable
 * stream ```WatchEvent```s from a ```WatchService```
 * backpressure support
-* tested on Linux (Windows, OSX todo)
+* tested on Linux, OSX (let me know if you have problems on Windows)
 
 Maven site reports TODO 
 

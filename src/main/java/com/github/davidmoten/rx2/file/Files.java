@@ -162,7 +162,7 @@ public final class Files {
     private static WatchService watchService(final File file, final Kind<?>... kinds) throws IOException {
         final Path path = getBasePath(file);
         WatchService watchService = path.getFileSystem().newWatchService();
-        path.register(watchService, kinds);
+        path.register(watchService, kinds, com.sun.nio.file.SensitivityWatchEventModifier.HIGH);
         return watchService;
     }
 
