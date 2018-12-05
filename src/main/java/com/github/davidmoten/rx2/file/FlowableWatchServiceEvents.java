@@ -2,18 +2,23 @@ package com.github.davidmoten.rx2.file;
 
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchService;
-import java.util.concurrent.TimeUnit;
 
 import org.reactivestreams.Subscriber;
 
 import io.reactivex.Flowable;
 import io.reactivex.Scheduler;
 
-public class FlowableWatchServiceEvents extends Flowable<WatchEvent<?>> {
+public final class FlowableWatchServiceEvents extends Flowable<WatchEvent<?>> {
 
-    public FlowableWatchServiceEvents(WatchService watchService, Scheduler scheduler, long pollDuration,
-            TimeUnit pollDurationUnit, long pollInterval, TimeUnit pollIntervalUnit) {
-        // TODO Auto-generated constructor stub
+    private final WatchService watchService;
+    private final Scheduler scheduler;
+    private final long pollIntervalMs;
+
+    public FlowableWatchServiceEvents(WatchService watchService, Scheduler scheduler, long pollIntervalMs
+            ) {
+        this.watchService = watchService;
+        this.scheduler = scheduler;
+        this.pollIntervalMs = pollIntervalMs;
     }
 
     @Override

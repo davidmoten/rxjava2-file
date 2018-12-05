@@ -2,12 +2,14 @@
 package com.github.davidmoten.rx2.file;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchEvent.Kind;
+import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,22 +17,22 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import com.github.davidmoten.guavamini.Preconditions;
-import com.github.davidmoten.rx.util.BackpressureStrategy;
 
 import io.reactivex.Flowable;
 import io.reactivex.Scheduler;
+import io.reactivex.Single;
 import io.reactivex.flowables.GroupedFlowable;
 import io.reactivex.functions.Function;
 import io.reactivex.functions.Predicate;
 import io.reactivex.schedulers.Schedulers;
 import rx.functions.Action0;
-import rx.functions.Func0;
 
 /**
  * Flowable utility methods related to {@link File}.
  */
 public final class Files {
 
+    private static final int DEFAULT_POLLING_INTERVAL_MS = 1000;
     public static final int DEFAULT_MAX_BYTES_PER_EMISSION = 8192;
 
     private Files() {
@@ -178,23 +180,23 @@ public final class Files {
      *            backpressures strategy to apply
      * @return an Flowable of WatchEvents from watchService
      */
-    public final static Flowable<WatchEvent<?>> from(WatchService watchService, Scheduler scheduler, long pollDuration,
-            TimeUnit pollDurationUnit, long pollInterval, TimeUnit pollIntervalUnit,
-            BackpressureStrategy backpressureStrategy) {
-        Preconditions.checkNotNull(watchService);
-        Preconditions.checkNotNull(scheduler);
-        Preconditions.checkNotNull(pollDurationUnit);
-        Preconditions.checkNotNull(backpressureStrategy);
-        Flowable<WatchEvent<?>> o = new FlowableWatchServiceEvents(watchService, scheduler, pollDuration,
-                pollDurationUnit, pollInterval, pollIntervalUnit);
-        if (backpressureStrategy == BackpressureStrategy.BUFFER) {
-            return o.onBackpressureBuffer();
-        } else if (backpressureStrategy == BackpressureStrategy.DROP)
-            return o.onBackpressureDrop();
-        else if (backpressureStrategy == BackpressureStrategy.LATEST)
-            return o.onBackpressureLatest();
-        else
-            throw new RuntimeException("unrecognized backpressureStrategy " + backpressureStrategy);
+    public final static Flowable<WatchEvent<?>> from(WatchService watchService, Scheduler scheduler, long interval,
+            TimeUnit unit) {
+        Preconditions.checkNotNull(watchService, "watchService cannot be null");
+        Preconditions.checkNotNull(scheduler, "scheduler cannot be null");
+        Preconditions.checkArgument(interval > 0, "interval must be positive");
+        Preconditions.checkNotNull(unit, "unit cannot be null");
+        return Flowable.interval(interval, unit, scheduler) //
+                .flatMap(x -> {
+                    WatchKey key = watchService.poll();
+                    if (key != null) {
+                        Flowable<WatchEvent<?>> r = Flowable.fromIterable(key.pollEvents());
+                        key.reset();
+                        return r;
+                    } else {
+                        return Flowable.empty();
+                    }
+                });
     }
 
     /**
@@ -206,8 +208,7 @@ public final class Files {
      * @return Flowable of watch events from the watch service
      */
     public final static Flowable<WatchEvent<?>> from(WatchService watchService) {
-        return from(watchService, Schedulers.trampoline(), Long.MAX_VALUE, TimeUnit.MILLISECONDS, 0,
-                TimeUnit.SECONDS, BackpressureStrategy.BUFFER);
+        return from(watchService, Schedulers.io(), DEFAULT_POLLING_INTERVAL_MS, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -264,16 +265,18 @@ public final class Files {
      * @return Flowable of watch events
      */
     public final static Flowable<WatchEvent<?>> from(final File file, final Action0 onWatchStarted, Kind<?>... kinds) {
-        return watchService(file, kinds)
-                // when watch service created call onWatchStarted
-                .doOnNext(w -> {
-                    if (onWatchStarted != null)
-                        onWatchStarted.call();
-                })
-                // emit events from the WatchService
-                .flatMap(TO_WATCH_EVENTS)
-                // restrict to events related to the file
-                .filter(onlyRelatedTo(file));
+        return Flowable.using(() -> watchService(file, kinds), //
+                ws -> Single.just(ws) //
+                        // when watch service created call onWatchStarted
+                        .doOnSuccess(w -> {
+                            if (onWatchStarted != null)
+                                onWatchStarted.call();
+                        })
+                        // emit events from the WatchService
+                        .flatMapPublisher(TO_WATCH_EVENTS)
+                        // restrict to events related to the file
+                        .filter(onlyRelatedTo(file)), //
+                ws -> ws.close(), true);
     }
 
     /**
@@ -285,24 +288,14 @@ public final class Files {
      * @param kinds
      *            event kinds to watch for
      * @return Flowable of watch events
+     * @throws IOException
      */
     @SafeVarargs
-    public final static Flowable<WatchService> watchService(final File file, final Kind<?>... kinds) {
-        return Flowable.defer(new Func0<Flowable<WatchService>>() {
-
-            @Override
-            public Flowable<WatchService> call() {
-                try {
-                    final Path path = getBasePath(file);
-                    WatchService watchService = path.getFileSystem().newWatchService();
-                    path.register(watchService, kinds);
-                    return Flowable.just(watchService);
-                } catch (Exception e) {
-                    return Flowable.error(e);
-                }
-            }
-        });
-
+    public final static WatchService watchService(final File file, final Kind<?>... kinds) throws IOException {
+        final Path path = getBasePath(file);
+        WatchService watchService = path.getFileSystem().newWatchService();
+        path.register(watchService, kinds);
+        return watchService;
     }
 
     private final static Path getBasePath(final File file) {
@@ -406,12 +399,9 @@ public final class Files {
     public static final class WatchEventsBuilder {
         private final File file;
         private Optional<Scheduler> scheduler = Optional.empty();
-        private long pollInterval = 0;
+        private long pollInterval = DEFAULT_POLLING_INTERVAL_MS;
         private TimeUnit pollIntervalUnit = TimeUnit.MILLISECONDS;
-        private Optional<Long> pollDuration = Optional.empty();
-        private TimeUnit pollDurationUnit = TimeUnit.MILLISECONDS;
         private final List<Kind<?>> kinds = new ArrayList<>();
-        private BackpressureStrategy backpressureStrategy = BackpressureStrategy.BUFFER;
 
         private WatchEventsBuilder(File file) {
             this.file = file;
@@ -425,14 +415,6 @@ public final class Files {
         public WatchEventsBuilder pollInterval(long interval, TimeUnit unit) {
             this.pollInterval = interval;
             this.pollIntervalUnit = unit;
-            if (!pollDuration.isPresent())
-                this.pollDuration = Optional.of(0L);
-            return this;
-        }
-
-        public WatchEventsBuilder pollDuration(long duration, TimeUnit unit) {
-            this.pollDuration = Optional.of(duration);
-            this.pollDurationUnit = unit;
             return this;
         }
 
@@ -448,29 +430,19 @@ public final class Files {
             return this;
         }
 
-        public WatchEventsBuilder onBackpressure(BackpressureStrategy strategy) {
-            this.backpressureStrategy = strategy;
-            return this;
-        }
-
         public Flowable<WatchEvent<?>> events() {
-            return watchService(file, kinds.toArray(new Kind<?>[] {}))
-                    .flatMap(new Function<WatchService, Flowable<WatchEvent<?>>>() {
-                        @Override
-                        public Flowable<WatchEvent<?>> apply(WatchService watchService) {
-                            if (!scheduler.isPresent()) {
-                                if (!pollDuration.isPresent() || pollDuration.get() == 0) {
-                                    scheduler = Optional.of(Schedulers.computation());
-                                } else {
-                                    // poll will block so don't do on
-                                    // computation()
-                                    scheduler = Optional.of(Schedulers.io());
-                                }
-                            }
-                            return from(watchService, scheduler.get(), pollDuration.orElse(Long.MAX_VALUE),
-                                    pollDurationUnit, pollInterval, pollIntervalUnit, backpressureStrategy);
-                        }
-                    });
+            List<Kind<?>> kindsCopy = new ArrayList<>(kinds);
+            if (kindsCopy.isEmpty()) {
+                kindsCopy.add(StandardWatchEventKinds.ENTRY_CREATE);
+                kindsCopy.add(StandardWatchEventKinds.ENTRY_DELETE);
+                kindsCopy.add(StandardWatchEventKinds.ENTRY_MODIFY);
+                kindsCopy.add(StandardWatchEventKinds.OVERFLOW);
+            }
+            return Flowable.using( //
+                    () -> watchService(file, kindsCopy.toArray(new Kind<?>[] {})), //
+                    ws -> from(ws, scheduler.orElse(Schedulers.io()), pollInterval, pollIntervalUnit), // 
+                    ws -> ws.close(), //
+                    true);
         }
 
     }
