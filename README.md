@@ -50,6 +50,7 @@ Flowable<String> lines =
      Files.tailLines("/var/log/server.log")
           .pollingInterval(500, TimeUnit.MILLISECONDS)
           .scheduler(Schedulers.io())
+          .modifier(SensitivityWatchEventModifier.HIGH)
           .startPosition(0)
           .chunkSize(8192)
           .utf8()

@@ -11,6 +11,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchEvent.Kind;
+import java.nio.file.WatchEvent.Modifier;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.util.ArrayList;
@@ -139,8 +140,8 @@ public final class Files {
      * @return Flowable of watch events
      */
     private static Flowable<WatchEvent<?>> events(File file, Scheduler scheduler, long pollingIntervalMs,
-            Kind<?>... kinds) {
-        return Flowable.using(() -> watchService(file, kinds), //
+            Kind<?>[] kinds, Modifier[] modifiers) {
+        return Flowable.using(() -> watchService(file, kinds, modifiers), //
                 ws -> events(ws, scheduler, pollingIntervalMs)
                         // restrict to events related to the file
                         .filter(onlyRelatedTo(file)), //
@@ -158,11 +159,10 @@ public final class Files {
      * @return Flowable of watch events
      * @throws IOException
      */
-    @SafeVarargs
-    private static WatchService watchService(final File file, final Kind<?>... kinds) throws IOException {
+    private static WatchService watchService(File file, Kind<?>[] kinds, Modifier[] modifiers) throws IOException {
         final Path path = getBasePath(file);
         WatchService watchService = path.getFileSystem().newWatchService();
-        path.register(watchService, kinds, com.sun.nio.file.SensitivityWatchEventModifier.HIGH);
+        path.register(watchService, kinds, modifiers);
         return watchService;
     }
 
@@ -244,6 +244,7 @@ public final class Files {
         private long pollInterval = DEFAULT_POLLING_INTERVAL_MS;
         private TimeUnit pollIntervalUnit = TimeUnit.MILLISECONDS;
         private final List<Kind<?>> kinds = new ArrayList<>();
+        private final List<Modifier> modifiers = new ArrayList<>();
 
         private WatchEventsBuilder(File file) {
             this.file = file;
@@ -272,6 +273,11 @@ public final class Files {
             return this;
         }
 
+        public WatchEventsBuilder modifier(Modifier modifier) {
+            this.modifiers.add(modifier);
+            return this;
+        }
+
         /**
          * If no kind is specified then all {@link StandardWatchEventKinds} are used.
          * 
@@ -295,7 +301,7 @@ public final class Files {
                 kindsCopy.add(StandardWatchEventKinds.OVERFLOW);
             }
             return Flowable.using( //
-                    () -> watchService(file, kindsCopy.toArray(new Kind<?>[] {})), //
+                    () -> watchService(file, kindsCopy.toArray(new Kind<?>[] {}), modifiers.toArray(new Modifier[] {})), //
                     ws -> Files.events(ws, scheduler.orElse(Schedulers.io()), pollIntervalUnit.toMillis(pollInterval)), //
                     ws -> ws.close(), //
                     true);
@@ -327,6 +333,7 @@ public final class Files {
         private long pollingIntervalMs = DEFAULT_POLLING_INTERVAL_MS;
         private Scheduler scheduler = Schedulers.io();
         private Flowable<?> events;
+        private final List<Modifier> modifiers = new ArrayList<>();
 
         TailerBytesBuilder(File file) {
             this.file = file;
@@ -371,10 +378,15 @@ public final class Files {
             this.events = events;
             return this;
         }
+        
+        public TailerBytesBuilder modifier(Modifier modifier) {
+            this.modifiers.add(modifier);
+            return this;
+        }
 
         private Flowable<?> events() {
             if (events == null) {
-                return Files.events(file, scheduler, pollingIntervalMs, ALL_KINDS);
+                return Files.events(file, scheduler, pollingIntervalMs, ALL_KINDS, modifiers.toArray(new Modifier[] {}));
             } else {
                 return events;
             }
@@ -395,6 +407,7 @@ public final class Files {
         private long pollingIntervalMs = DEFAULT_POLLING_INTERVAL_MS;
         private Scheduler scheduler = Schedulers.io();
         private Flowable<?> events;
+        private final List<Modifier> modifiers = new ArrayList<>();
 
         TailerLinesBuilder(File file) {
             this.file = file;
@@ -461,6 +474,11 @@ public final class Files {
             this.scheduler = scheduler;
             return this;
         }
+        
+        public TailerLinesBuilder modifier(Modifier modifier) {
+            this.modifiers.add(modifier);
+            return this;
+        }
 
         public TailerLinesBuilder events(Flowable<?> events) {
             this.events = events;
@@ -469,7 +487,7 @@ public final class Files {
 
         private Flowable<?> events() {
             if (events == null) {
-                return Files.events(file, scheduler, pollingIntervalMs, ALL_KINDS);
+                return Files.events(file, scheduler, pollingIntervalMs, ALL_KINDS, modifiers.toArray(new Modifier[] {}));
             } else {
                 return events;
             }

@@ -13,7 +13,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Test;
 
-import io.reactivex.Flowable;
 import io.reactivex.schedulers.TestScheduler;
 import io.reactivex.subscribers.TestSubscriber;
 
@@ -21,6 +20,17 @@ public class FilesTest {
 
     @Test
     public void testEventsWithTestScheduler() throws InterruptedException, IOException {
+        try {
+            checkEvents(300);
+        } catch (AssertionError e) {
+            // fallback to 10s waits because OSX can be really slow
+            // see
+            // https://stackoverflow.com/questions/9588737/is-java-7-watchservice-slow-for-anyone-else
+            checkEvents(10000);
+        }
+    }
+
+    private void checkEvents(long waitMs) throws IOException, InterruptedException {
         File file = new File("target/testEvents.txt");
         file.delete();
         AtomicInteger errors = new AtomicInteger();
@@ -36,12 +46,12 @@ public class FilesTest {
                 .test();
         ts.assertNoValues().assertNotTerminated();
         file.createNewFile();
-        Thread.sleep(300);
+        Thread.sleep(waitMs);
         scheduler.advanceTimeBy(1, TimeUnit.MINUTES);
         ts.assertValueCount(1).assertNotTerminated();
         ts.assertValueAt(0, x -> x.kind().equals(StandardWatchEventKinds.ENTRY_CREATE));
         file.delete();
-        Thread.sleep(300);
+        Thread.sleep(waitMs);
         scheduler.advanceTimeBy(1, TimeUnit.MINUTES);
         ts.assertValueCount(2).assertNotTerminated();
         ts.assertValueAt(1, x -> x.kind().equals(StandardWatchEventKinds.ENTRY_DELETE));
@@ -49,19 +59,18 @@ public class FilesTest {
     }
 
     @Test
-    public void testInterval() {
-        TestScheduler scheduler = new TestScheduler();
-        TestSubscriber<Long> ts = Flowable.interval(1, TimeUnit.SECONDS, scheduler) //
-                .test();
-        ts.assertNoValues().assertNotTerminated();
-        scheduler.advanceTimeBy(1, TimeUnit.SECONDS);
-        ts.assertValues(0L).assertNotTerminated();
-        scheduler.advanceTimeBy(1, TimeUnit.SECONDS);
-        ts.assertValues(0L, 1L).assertNotTerminated();
+    public void testTailFile() throws InterruptedException, FileNotFoundException {
+        try {
+            checkTailFile(100);
+        } catch (AssertionError e) {
+            // fallback to 10s waits because OSX can be really slow
+            // see
+            // https://stackoverflow.com/questions/9588737/is-java-7-watchservice-slow-for-anyone-else
+            checkTailFile(10000);
+        }
     }
 
-    @Test
-    public void testTailFile() throws InterruptedException, FileNotFoundException {
+    private void checkTailFile(long waitMs) throws InterruptedException, FileNotFoundException {
         File file = new File("target/lines.txt");
         file.delete();
         List<String> lines = new CopyOnWriteArrayList<>();
@@ -71,19 +80,22 @@ public class FilesTest {
                 .build() //
                 .doOnNext(x -> lines.add(x)) //
                 .test();
-        Thread.sleep(100);
-        try (PrintWriter out = new PrintWriter(file)) {
-            out.println("a");
-            out.flush();
-            Thread.sleep(100);
-            ts.assertValuesOnly("a");
-            out.println("b");
-            out.flush();
-            Thread.sleep(100);
-            ts.assertValuesOnly("a", "b");
+        try {
+            Thread.sleep(waitMs);
+            try (PrintWriter out = new PrintWriter(file)) {
+                out.println("a");
+                out.flush();
+                Thread.sleep(waitMs);
+                ts.assertValuesOnly("a");
+                out.println("b");
+                out.flush();
+                Thread.sleep(waitMs);
+                ts.assertValuesOnly("a", "b");
+            }
+        } finally {
+            // stop tailing
+            ts.cancel();
         }
-        // stop tailing
-        ts.cancel();
     }
 
 }
