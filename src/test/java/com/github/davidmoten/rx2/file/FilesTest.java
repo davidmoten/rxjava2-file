@@ -66,10 +66,9 @@ public class FilesTest {
         file.delete();
         List<String> lines = new CopyOnWriteArrayList<>();
         TestSubscriber<String> ts = Files //
-                .tailer() //
+                .tailLines(file) //
                 .pollingInterval(50, TimeUnit.MILLISECONDS) //
-                .file(file) //
-                .tailLines() //
+                .build() //
                 .doOnNext(x -> lines.add(x)) //
                 .test();
         Thread.sleep(100);
@@ -85,12 +84,6 @@ public class FilesTest {
         }
         // stop tailing
         ts.cancel();
-    }
-
-    public static void main(String[] args) throws InterruptedException {
-        Files.tailer().file("/home/dxm/ais.txt").tailLines() //
-                .doOnNext(x -> System.out.println(x)).subscribe();
-        Thread.sleep(10000000L);
     }
 
 }

@@ -23,9 +23,7 @@ import com.github.davidmoten.rx2.Bytes;
 
 import io.reactivex.Flowable;
 import io.reactivex.Scheduler;
-import io.reactivex.Single;
 import io.reactivex.flowables.GroupedFlowable;
-import io.reactivex.functions.Action;
 import io.reactivex.functions.Function;
 import io.reactivex.functions.Predicate;
 import io.reactivex.schedulers.Schedulers;
@@ -70,10 +68,10 @@ public final class Files {
      *            {@link Flowable#interval(long, TimeUnit)} for example.
      * @return Flowable of byte arrays
      */
-    private static Flowable<byte[]> tailBytes(File file, long startPosition, long sampleTimeMs, int chunkSize,
+    private static Flowable<byte[]> tailBytes(File file, long startPosition, long pollingIntervalMs, int chunkSize,
             Flowable<?> events) {
         Preconditions.checkNotNull(file);
-        return sampleModifyOrOverflowEventsOnly(events, sampleTimeMs)
+        return sampleModifyOrOverflowEventsOnly(events, pollingIntervalMs * 2)
                 // tail file triggered by events
                 .compose(x -> eventsToBytes(events, file, startPosition, chunkSize));
     }
@@ -310,37 +308,32 @@ public final class Files {
 
     }
 
-    public static TailerBuilder tailer() {
-        return new TailerBuilder();
+    public static TailerBytesBuilder tailBytes(File file) {
+        return new TailerBytesBuilder(file);
     }
 
-    public static final class TailerBuilder {
+    public static TailerBytesBuilder tailBytes(String filename) {
+        return tailBytes(new File(filename));
+    }
 
-        private File file = null;
+    public static TailerLinesBuilder tailLines(File file) {
+        return new TailerLinesBuilder(file);
+    }
+
+    public static TailerLinesBuilder tailLines(String filename) {
+        return tailLines(new File(filename));
+    }
+
+    public static final class TailerBytesBuilder {
+
+        private final File file;
         private long startPosition = 0;
-        private long sampleTimeMs = DEFAULT_POLLING_INTERVAL_MS;
         private int chunkSize = 8192;
-        private Charset charset = StandardCharsets.UTF_8;
         private long pollingIntervalMs = DEFAULT_POLLING_INTERVAL_MS;
         private Scheduler scheduler = Schedulers.io();
 
-        private TailerBuilder() {
-        }
-
-        /**
-         * The file to tail.
-         * 
-         * @param file
-         *            file to tail
-         * @return the builder (this)
-         */
-        public TailerBuilder file(File file) {
+        TailerBytesBuilder(File file) {
             this.file = file;
-            return this;
-        }
-
-        public TailerBuilder file(String filename) {
-            return file(new File(filename));
         }
 
         /**
@@ -351,29 +344,12 @@ public final class Files {
          *            start position
          * @return this
          */
-        public TailerBuilder startPosition(long startPosition) {
+        public TailerBytesBuilder startPosition(long startPosition) {
             this.startPosition = startPosition;
             return this;
         }
 
-        /**
-         * Specifies sampling to apply to the source Flowable (which could be very busy
-         * if a lot of writes are occurring for example). Sampling is only applied to
-         * file updates (MODIFY and OVERFLOW), file creation and deletion events are
-         * always passed through.
-         * 
-         * @param sampleTime
-         *            sample time
-         * @param unit
-         *            unit for sampleTime
-         * @return this
-         */
-        public TailerBuilder sampleTime(long sampleTime, TimeUnit unit) {
-            this.sampleTimeMs = unit.toMillis(sampleTime);
-            return this;
-        }
-
-        public TailerBuilder pollingInterval(long pollingInterval, TimeUnit unit) {
+        public TailerBytesBuilder pollingInterval(long pollingInterval, TimeUnit unit) {
             this.pollingIntervalMs = unit.toMillis(pollingInterval);
             return this;
         }
@@ -385,7 +361,65 @@ public final class Files {
          *            chunk size in bytes
          * @return this
          */
-        public TailerBuilder chunkSize(int chunkSize) {
+        public TailerBytesBuilder chunkSize(int chunkSize) {
+            this.chunkSize = chunkSize;
+            return this;
+        }
+
+        public TailerBytesBuilder scheduler(Scheduler scheduler) {
+            this.scheduler = scheduler;
+            return this;
+        }
+
+        private Flowable<?> events() {
+            return Files.events(file, scheduler, pollingIntervalMs, ALL_KINDS);
+        }
+
+        public Flowable<byte[]> build() {
+            return Files.tailBytes(file, startPosition, pollingIntervalMs, chunkSize, events());
+        }
+
+    }
+
+    public static final class TailerLinesBuilder {
+
+        private final File file;
+        private long startPosition = 0;
+        private int chunkSize = 8192;
+        private Charset charset = StandardCharsets.UTF_8;
+        private long pollingIntervalMs = DEFAULT_POLLING_INTERVAL_MS;
+        private Scheduler scheduler = Schedulers.io();
+
+        TailerLinesBuilder(File file) {
+            this.file = file;
+        }
+
+        /**
+         * The startPosition in bytes in the file to commence the tail from. 0 = start
+         * of file. Defaults to 0.
+         * 
+         * @param startPosition
+         *            start position
+         * @return this
+         */
+        public TailerLinesBuilder startPosition(long startPosition) {
+            this.startPosition = startPosition;
+            return this;
+        }
+
+        public TailerLinesBuilder pollingInterval(long pollingInterval, TimeUnit unit) {
+            this.pollingIntervalMs = unit.toMillis(pollingInterval);
+            return this;
+        }
+
+        /**
+         * Emissions from the tailed file will be no bigger than this.
+         * 
+         * @param chunkSize
+         *            chunk size in bytes
+         * @return this
+         */
+        public TailerLinesBuilder chunkSize(int chunkSize) {
             this.chunkSize = chunkSize;
             return this;
         }
@@ -397,7 +431,7 @@ public final class Files {
          *            charset to decode with
          * @return this
          */
-        public TailerBuilder charset(Charset charset) {
+        public TailerLinesBuilder charset(Charset charset) {
             this.charset = charset;
             return this;
         }
@@ -409,31 +443,26 @@ public final class Files {
          *            charset to decode the file with
          * @return this
          */
-        public TailerBuilder charset(String charset) {
+        public TailerLinesBuilder charset(String charset) {
             return charset(Charset.forName(charset));
         }
 
-        public TailerBuilder utf8() {
+        public TailerLinesBuilder utf8() {
             return charset("UTF-8");
         }
 
-        public TailerBuilder scheduler(Scheduler scheduler) {
+        public TailerLinesBuilder scheduler(Scheduler scheduler) {
             this.scheduler = scheduler;
             return this;
         }
 
-        public Flowable<byte[]> tailBytes() {
-            return Files.tailBytes(file, startPosition, sampleTimeMs, chunkSize, getSource());
+        private Flowable<?> events() {
+            return Files.events(file, scheduler, pollingIntervalMs, ALL_KINDS);
         }
 
-        public Flowable<String> tailLines() {
-            return Files.tailLines(file, startPosition, chunkSize, charset, getSource());
+        public Flowable<String> build() {
+            return Files.tailLines(file, startPosition, chunkSize, charset, events());
         }
-
-        private Flowable<?> getSource() {
-            return events(file, scheduler, pollingIntervalMs, ALL_KINDS);
-        }
-
     }
 
     private static final class State {
