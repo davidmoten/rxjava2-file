@@ -25,7 +25,7 @@ public class FilesTest {
         try {
             checkEvents(300);
         } catch (AssertionError e) {
-            // fallback to 10s waits because OSX can be really slow
+            // fallback to 30s waits because OSX can be really slow
             // see
             // https://stackoverflow.com/questions/9588737/is-java-7-watchservice-slow-for-anyone-else
             checkEvents(MAX_WAIT_MS);
@@ -65,7 +65,7 @@ public class FilesTest {
         try {
             checkTailFile(100);
         } catch (AssertionError e) {
-            // fallback to 10s waits because OSX can be really slow
+            // fallback to 30s waits because OSX can be really slow
             // see
             // https://stackoverflow.com/questions/9588737/is-java-7-watchservice-slow-for-anyone-else
             checkTailFile(MAX_WAIT_MS);
