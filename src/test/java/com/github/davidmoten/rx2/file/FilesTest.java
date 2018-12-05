@@ -17,6 +17,8 @@ import io.reactivex.schedulers.TestScheduler;
 import io.reactivex.subscribers.TestSubscriber;
 
 public class FilesTest {
+    
+    private static final long MAX_WAIT_MS = 30000;
 
     @Test
     public void testEventsWithTestScheduler() throws InterruptedException, IOException {
@@ -26,7 +28,7 @@ public class FilesTest {
             // fallback to 10s waits because OSX can be really slow
             // see
             // https://stackoverflow.com/questions/9588737/is-java-7-watchservice-slow-for-anyone-else
-            checkEvents(10000);
+            checkEvents(MAX_WAIT_MS);
         }
     }
 
@@ -66,7 +68,7 @@ public class FilesTest {
             // fallback to 10s waits because OSX can be really slow
             // see
             // https://stackoverflow.com/questions/9588737/is-java-7-watchservice-slow-for-anyone-else
-            checkTailFile(10000);
+            checkTailFile(MAX_WAIT_MS);
         }
     }
 
