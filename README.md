@@ -50,6 +50,7 @@ Flowable<String> lines =
      Files.tailLines("/var/log/server.log")
           .pollingInterval(500, TimeUnit.MILLISECONDS)
           .scheduler(Schedulers.io())
+          // set a private sun modifier that improves OSX responsiveness
           .modifier(SensitivityWatchEventModifier.HIGH)
           .startPosition(0)
           .chunkSize(8192)
@@ -104,4 +105,4 @@ Flowable<WatchEvent<?>> events =
 ```
 
 ## OSX
-Apparently the WatchService can be slow on OSX (see [here](https://stackoverflow.com/questions/9588737/is-java-7-watchservice-slow-for-anyone-else)). Note that the first example above shows how to pass a special `WatchEvent.Modifier` which some find has a beneficial effect.
+Apparently the `WatchService` can be slow on OSX (see [here](https://stackoverflow.com/questions/9588737/is-java-7-watchservice-slow-for-anyone-else)). Note that the first example above shows how to pass a special `WatchEvent.Modifier` which some find has a beneficial effect. Without that the `WatchService` can take >10 seconds to detect changes to the file system.
