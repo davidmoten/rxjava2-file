@@ -56,8 +56,9 @@ public final class Files {
      *            the file to tail
      * @param startPosition
      *            start tailing file at position in bytes
-     * @param sampleTimeMs
-     *            sample time in millis for MODIFY and OVERFLOW events
+     * @param pollingIntervalMs
+     *            polling time in millis for MODIFY and OVERFLOW events and half of
+     *            sample time for overflow
      * @param chunkSize
      *            max array size of each element emitted by the Flowable. Is also
      *            used as the buffer size for reading from the file. Try
@@ -104,26 +105,6 @@ public final class Files {
         return toLines(events.compose(x -> eventsToBytes(x, file, startPosition, chunkSize)), charset);
     }
 
-    /**
-     * Returns an {@link Flowable} of {@link WatchEvent}s from a
-     * {@link WatchService}.
-     * 
-     * @param watchService
-     *            WatchService to generate events from
-     * @param scheduler
-     *            schedules polls of the watchService
-     * @param pollDuration
-     *            duration of each poll
-     * @param pollDurationUnit
-     *            time unit for the duration of each poll
-     * @param pollInterval
-     *            interval between polls of the watchService
-     * @param pollIntervalUnit
-     *            time unit for the interval between polls
-     * @param backpressureStrategy
-     *            backpressures strategy to apply
-     * @return an Flowable of WatchEvents from watchService
-     */
     private static Flowable<WatchEvent<?>> events(WatchService watchService, Scheduler scheduler, long intervalMs) {
         Preconditions.checkNotNull(watchService, "watchService cannot be null");
         Preconditions.checkNotNull(scheduler, "scheduler cannot be null");
