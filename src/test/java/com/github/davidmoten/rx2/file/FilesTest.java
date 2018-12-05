@@ -29,7 +29,7 @@ public class FilesTest {
                 .events(file) //
                 .scheduler(scheduler) //
                 .pollInterval(1, TimeUnit.MINUTES) //
-                .events() //
+                .build() //
                 .doOnNext(System.out::println) //
                 .take(3) //
                 .doOnError(e -> errors.incrementAndGet()) //

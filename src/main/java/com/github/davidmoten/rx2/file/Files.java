@@ -279,11 +279,25 @@ public final class Files {
             return this;
         }
 
+        /**
+         * If no kind is specified then all {@link StandardWatchEventKinds} are used.
+         * 
+         * @param kind
+         *            kind to add
+         * @return this
+         */
         public WatchEventsBuilder kind(Kind<?> kind) {
             this.kinds.add(kind);
             return this;
         }
 
+        /**
+         * If no kind is specified then all {@link StandardWatchEventKinds} are used.
+         * 
+         * @param kinds
+         *            kinds to add
+         * @return this
+         */
         public WatchEventsBuilder kinds(Kind<?>... kinds) {
             for (Kind<?> kind : kinds) {
                 this.kinds.add(kind);
@@ -291,7 +305,7 @@ public final class Files {
             return this;
         }
 
-        public Flowable<WatchEvent<?>> events() {
+        public Flowable<WatchEvent<?>> build() {
             List<Kind<?>> kindsCopy = new ArrayList<>(kinds);
             if (kindsCopy.isEmpty()) {
                 kindsCopy.add(StandardWatchEventKinds.ENTRY_CREATE);
