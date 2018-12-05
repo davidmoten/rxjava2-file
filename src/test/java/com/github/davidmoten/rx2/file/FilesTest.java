@@ -78,7 +78,13 @@ public class FilesTest {
             out.flush();
             Thread.sleep(100);
             ts.assertValuesOnly("a");
+            out.println("b");
+            out.flush();
+            Thread.sleep(100);
+            ts.assertValuesOnly("a", "b");
         }
+        // stop tailing
+        ts.cancel();
     }
 
     public static void main(String[] args) throws InterruptedException {
