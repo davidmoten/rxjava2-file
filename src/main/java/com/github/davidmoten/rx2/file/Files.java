@@ -345,6 +345,7 @@ public final class Files {
         private int chunkSize = 8192;
         private long pollingIntervalMs = DEFAULT_POLLING_INTERVAL_MS;
         private Scheduler scheduler = Schedulers.io();
+        private Flowable<?> events;
 
         TailerBytesBuilder(File file) {
             this.file = file;
@@ -385,8 +386,17 @@ public final class Files {
             return this;
         }
 
+        public TailerBytesBuilder events(Flowable<?> events) {
+            this.events = events;
+            return this;
+        }
+
         private Flowable<?> events() {
-            return Files.events(file, scheduler, pollingIntervalMs, ALL_KINDS);
+            if (events == null) {
+                return Files.events(file, scheduler, pollingIntervalMs, ALL_KINDS);
+            } else {
+                return events;
+            }
         }
 
         public Flowable<byte[]> build() {
@@ -403,6 +413,7 @@ public final class Files {
         private Charset charset = StandardCharsets.UTF_8;
         private long pollingIntervalMs = DEFAULT_POLLING_INTERVAL_MS;
         private Scheduler scheduler = Schedulers.io();
+        private Flowable<?> events;
 
         TailerLinesBuilder(File file) {
             this.file = file;
@@ -470,8 +481,17 @@ public final class Files {
             return this;
         }
 
+        public TailerLinesBuilder events(Flowable<?> events) {
+            this.events = events;
+            return this;
+        }
+
         private Flowable<?> events() {
-            return Files.events(file, scheduler, pollingIntervalMs, ALL_KINDS);
+            if (events == null) {
+                return Files.events(file, scheduler, pollingIntervalMs, ALL_KINDS);
+            } else {
+                return events;
+            }
         }
 
         public Flowable<String> build() {
