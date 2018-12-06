@@ -1,8 +1,9 @@
 # rxjava2-file
 
 <a href="https://travis-ci.org/davidmoten/rxjava2-file"><img src="https://travis-ci.org/davidmoten/rxjava2-file.svg"/></a><br/>
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.github.davidmoten/rxjava2-file/badge.svg?style=flat)](https://maven-badges.herokuapp.com/maven-central/com.github.davidmoten/rxjava2-file)</br>
-[![codecov](https://codecov.io/gh/davidmoten/rxjava2-file/branch/master/graph/badge.svg)](https://codecov.io/gh/davidmoten/rxjava2-file)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.github.davidmoten/rxjava2-file/badge.svg?style=flat)](https://maven-badges.herokuapp.com/maven-central/com.github.davidmoten/rxjava2-file)<br/>
+[![codecov](https://codecov.io/gh/davidmoten/rxjava2-file/branch/master/graph/badge.svg)](https://codecov.io/gh/davidmoten/rxjava2-file)<br/>
+[![appveyor](https://ci.appveyor.com/api/projects/status/github/davidmoten/rxjava2-file)](https://ci.appveyor.com/project/davidmoten/rxjava2-file)
 
 
 Status: *released to Maven Central*
