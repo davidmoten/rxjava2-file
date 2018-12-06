@@ -12,7 +12,7 @@ Requires Java 8+.
 Flowable utilities for files:
 * tail a file (either lines or byte[]) 
 * trigger tail updates using Java 8 and later NIO ```WatchService``` events
-* or trigger tail updates using any Observable
+* or trigger tail updates using any Flowable
 * stream ```WatchEvent```s from a ```WatchService```
 * backpressure support
 * tested on Linux, [OSX](#osx) (let me know if you have problems on Windows)
@@ -41,7 +41,7 @@ mvn clean install
 
 ### Tail a text file with NIO
 
-Tail the lines of the text log file ```/var/log/server.log``` as an ```Observable<String>```:
+Tail the lines of the text log file ```/var/log/server.log``` as an ```Flowable<String>```:
 
 ```java
 import com.github.davidmoten.rx2.file.Files;
@@ -59,7 +59,7 @@ Flowable<String> lines =
 ```
 or, using defaults of startPosition 0, chunkSize 8192, charset UTF-8, scheduler `Schedulers.io()`:
 ```java
-Observable<String> items = 
+Flowable<String> items = 
      Files.tailLines("/var/log/server.log").build();
 	  
 ```
@@ -70,27 +70,27 @@ The above example uses a ```WatchService``` to generate ```WatchEvent```s to pro
 To use polling instead (say every 5 seconds):
 
 ```java
-Observable<String> items = 
-     FileObservable.tailer()
+Flowable<String> items = 
+     FileFlowable.tailer()
                    .file(new File("var/log/server.log"))
-                   .events(Observable.interval(5, TimeUnit.SECONDS))
+                   .events(Flowable.interval(5, TimeUnit.SECONDS))
                    .tailText();
 ```
 
 ### Tail a binary file with NIO
 ```java
-Observable<byte[]> items = 
-     FileObservable.tailer()
+Flowable<byte[]> items = 
+     FileFlowable.tailer()
                    .file("/tmp/dump.bin")
                    .tail();
 ```
 
 ### Tail a binary file without NIO
 ```java
-Observable<byte[]> items = 
-     FileObservable.tailer()
+Flowable<byte[]> items = 
+     FileFlowable.tailer()
                    .file("/tmp/dump.bin")
-                   .events(Observable.interval(5, TimeUnit.SECONDS))
+                   .events(Flowable.interval(5, TimeUnit.SECONDS))
                    .tail();
 ```
 
