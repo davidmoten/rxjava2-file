@@ -74,9 +74,9 @@ public class FilesTest {
 
     @Test
     public void testTailFile() throws InterruptedException, FileNotFoundException {
-        if (System.getProperty("os.name").toLowerCase().startsWith("windows")) {
-            System.out.println("ignoring test because Windows is problematic in detecting file change events");
-        }
+//        if (System.getProperty("os.name").toLowerCase().startsWith("windows")) {
+//            System.out.println("ignoring test because Windows is problematic in detecting file change events");
+//        }
         try {
             checkTailFile(100);
         } catch (AssertionError e) {
@@ -102,15 +102,21 @@ public class FilesTest {
             Thread.sleep(waitMs);
             try (PrintWriter out = new PrintWriter(file)) {
                 out.println("a");
-                out.flush();
                 //help windows know that the file has changed
                 file.setLastModified(System.currentTimeMillis());
+                out.flush();
+                // help windows some more
+                file.getParentFile().list();
+
                 Thread.sleep(waitMs);
                 ts.assertValues("a");
                 out.println("b");
-                out.flush();
                 // help windows know that the file has changed
                 file.setLastModified(System.currentTimeMillis());
+                out.flush();
+                
+                // help windows some more
+                file.getParentFile().list();
                 Thread.sleep(waitMs);
                 ts.assertValues("a", "b");
             }
