@@ -37,7 +37,7 @@ public class FilesTest {
     }
 
     private void checkEvents(long waitMs) throws IOException, InterruptedException {
-        System.out.println("checkEvents waitMs="+ waitMs);
+        System.out.println("checkEvents waitMs=" + waitMs);
         File file = new File("target/testEvents.txt");
         file.delete();
         AtomicInteger errors = new AtomicInteger();
@@ -74,7 +74,8 @@ public class FilesTest {
 
     @Test
     public void testTailFile() throws InterruptedException, FileNotFoundException {
-        if (System.getProperty("os.name").toLowerCase().startsWith("windows")) {
+        System.out.println("os.name=" + System.getProperty("os.name"));
+        if (System.getProperty("os.name").toLowerCase().contains("win")) {
             System.out.println("ignoring test because Windows is problematic in detecting file change events");
         }
         try {
@@ -88,7 +89,7 @@ public class FilesTest {
     }
 
     private void checkTailFile(long waitMs) throws InterruptedException, FileNotFoundException {
-        System.out.println("checkTailFile waitMs="+ waitMs);
+        System.out.println("checkTailFile waitMs=" + waitMs);
         File file = new File("target/lines.txt");
         file.delete();
         List<String> lines = new CopyOnWriteArrayList<>();
@@ -102,7 +103,7 @@ public class FilesTest {
             Thread.sleep(waitMs);
             try (PrintWriter out = new PrintWriter(file)) {
                 out.println("a");
-                //help windows know that the file has changed
+                // help windows know that the file has changed
                 file.setLastModified(System.currentTimeMillis());
                 out.flush();
                 // help windows some more
@@ -114,7 +115,7 @@ public class FilesTest {
                 // help windows know that the file has changed
                 file.setLastModified(System.currentTimeMillis());
                 out.flush();
-                
+
                 // help windows some more
                 file.getParentFile().list();
                 Thread.sleep(waitMs);
