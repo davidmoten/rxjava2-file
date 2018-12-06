@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+import com.github.davidmoten.guavamini.Lists;
 import com.github.davidmoten.guavamini.Preconditions;
 import com.github.davidmoten.rx2.Bytes;
 
@@ -36,9 +37,9 @@ public final class Files {
 
     private static final int DEFAULT_POLLING_INTERVAL_MS = 1000;
     public static final int DEFAULT_MAX_BYTES_PER_EMISSION = 8192;
-    public static final Kind<?>[] ALL_KINDS = new Kind<?>[] { StandardWatchEventKinds.ENTRY_CREATE,
+    public static final List<Kind<?>> ALL_KINDS = Lists.newArrayList(StandardWatchEventKinds.ENTRY_CREATE,
             StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY,
-            StandardWatchEventKinds.OVERFLOW };
+            StandardWatchEventKinds.OVERFLOW);
 
     private Files() {
         // prevent instantiation
@@ -140,7 +141,7 @@ public final class Files {
      * @return Flowable of watch events
      */
     private static Flowable<WatchEvent<?>> events(File file, Scheduler scheduler, long pollingIntervalMs,
-            Kind<?>[] kinds, Modifier[] modifiers) {
+            List<Kind<?>> kinds, List<Modifier> modifiers) {
         return Flowable.using(() -> watchService(file, kinds, modifiers), //
                 ws -> events(ws, scheduler, pollingIntervalMs)
                         // restrict to events related to the file
@@ -159,10 +160,11 @@ public final class Files {
      * @return Flowable of watch events
      * @throws IOException
      */
-    private static WatchService watchService(File file, Kind<?>[] kinds, Modifier[] modifiers) throws IOException {
+    private static WatchService watchService(File file, List<Kind<?>> kinds, List<Modifier> modifiers)
+            throws IOException {
         final Path path = getBasePath(file);
         WatchService watchService = path.getFileSystem().newWatchService();
-        path.register(watchService, kinds, modifiers);
+        path.register(watchService, kinds.toArray(new Kind<?>[] {}), modifiers.toArray(new Modifier[] {}));
         return watchService;
     }
 
@@ -301,7 +303,7 @@ public final class Files {
                 kindsCopy.add(StandardWatchEventKinds.OVERFLOW);
             }
             return Flowable.using( //
-                    () -> watchService(file, kindsCopy.toArray(new Kind<?>[] {}), modifiers.toArray(new Modifier[] {})), //
+                    () -> watchService(file, kindsCopy, modifiers), //
                     ws -> Files.events(ws, scheduler.orElse(Schedulers.io()), pollIntervalUnit.toMillis(pollInterval)), //
                     ws -> ws.close(), //
                     true);
@@ -378,7 +380,7 @@ public final class Files {
             this.events = events;
             return this;
         }
-        
+
         public TailerBytesBuilder modifier(Modifier modifier) {
             this.modifiers.add(modifier);
             return this;
@@ -386,7 +388,7 @@ public final class Files {
 
         private Flowable<?> events() {
             if (events == null) {
-                return Files.events(file, scheduler, pollingIntervalMs, ALL_KINDS, modifiers.toArray(new Modifier[] {}));
+                return Files.events(file, scheduler, pollingIntervalMs, ALL_KINDS, modifiers);
             } else {
                 return events;
             }
@@ -474,7 +476,7 @@ public final class Files {
             this.scheduler = scheduler;
             return this;
         }
-        
+
         public TailerLinesBuilder modifier(Modifier modifier) {
             this.modifiers.add(modifier);
             return this;
@@ -487,7 +489,7 @@ public final class Files {
 
         private Flowable<?> events() {
             if (events == null) {
-                return Files.events(file, scheduler, pollingIntervalMs, ALL_KINDS, modifiers.toArray(new Modifier[] {}));
+                return Files.events(file, scheduler, pollingIntervalMs, ALL_KINDS, modifiers);
             } else {
                 return events;
             }
