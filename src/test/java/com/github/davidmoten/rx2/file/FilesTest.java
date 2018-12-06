@@ -77,6 +77,7 @@ public class FilesTest {
         System.out.println("os.name=" + System.getProperty("os.name"));
         if (System.getProperty("os.name").toLowerCase().contains("win")) {
             System.out.println("ignoring test because Windows is problematic in detecting file change events");
+            return;
         }
         try {
             checkTailFile(100);
