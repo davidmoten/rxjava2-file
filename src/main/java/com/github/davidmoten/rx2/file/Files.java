@@ -6,6 +6,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardWatchEventKinds;
@@ -113,12 +114,17 @@ public final class Files {
         Preconditions.checkArgument(intervalMs > 0, "intervalMs must be positive");
         return Flowable.interval(intervalMs, TimeUnit.MILLISECONDS, scheduler) //
                 .flatMap(x -> {
-                    WatchKey key = watchService.poll();
-                    if (key != null) {
-                        Flowable<WatchEvent<?>> r = Flowable.fromIterable(key.pollEvents());
-                        key.reset();
-                        return r;
-                    } else {
+                    try {
+                        WatchKey key = watchService.poll();
+                        if (key != null) {
+                            Flowable<WatchEvent<?>> r = Flowable.fromIterable(key.pollEvents());
+                            key.reset();
+                            return r;
+                        } else {
+                            return Flowable.empty();
+                        }
+                    } catch (ClosedWatchServiceException e) {
+                        // ignore
                         return Flowable.empty();
                     }
                 });

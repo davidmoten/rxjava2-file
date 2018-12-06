@@ -1,5 +1,7 @@
 package com.github.davidmoten.rx2.file;
 
+import static org.junit.Assert.assertTrue;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -13,11 +15,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Test;
 
+import com.github.davidmoten.guavamini.Lists;
+
 import io.reactivex.schedulers.TestScheduler;
 import io.reactivex.subscribers.TestSubscriber;
 
 public class FilesTest {
-    
+
     private static final long MAX_WAIT_MS = 30000;
 
     @Test
@@ -37,13 +41,13 @@ public class FilesTest {
         file.delete();
         AtomicInteger errors = new AtomicInteger();
         TestScheduler scheduler = new TestScheduler();
-        TestSubscriber<WatchEvent<?>> ts = Files //
+        TestSubscriber<String> ts = Files //
                 .events(file) //
                 .scheduler(scheduler) //
                 .pollInterval(1, TimeUnit.MINUTES) //
                 .build() //
-                .doOnNext(x -> System.out.println(x.kind().name() + ", count="+ x.count())) //
-                .take(3) //
+                .doOnNext(x -> System.out.println(x.kind().name() + ", count=" + x.count())) //
+                .map(x -> x.kind().name()).take(3) //
                 .doOnError(e -> errors.incrementAndGet()) //
                 .test();
         ts.assertNoValues().assertNotTerminated();
@@ -51,12 +55,20 @@ public class FilesTest {
         Thread.sleep(waitMs);
         scheduler.advanceTimeBy(1, TimeUnit.MINUTES);
         ts.assertValueCount(1).assertNotTerminated();
-        ts.assertValueAt(0, x -> x.kind().equals(StandardWatchEventKinds.ENTRY_CREATE));
+        ts.assertValueAt(0, x -> x.equals(StandardWatchEventKinds.ENTRY_CREATE.name()));
         file.delete();
         Thread.sleep(waitMs);
         scheduler.advanceTimeBy(1, TimeUnit.MINUTES);
-        ts.assertValueCount(2).assertNotTerminated();
-        ts.assertValueAt(1, x -> x.kind().equals(StandardWatchEventKinds.ENTRY_DELETE));
+        ts.assertNotTerminated();
+        // windows detects ENTRY_MODIFY, ENTRY_DELETE
+        // linux, osx detect ENTRY_DELETE
+        assertTrue(ts.values().equals(Lists.newArrayList( //
+                StandardWatchEventKinds.ENTRY_CREATE.name(), //
+                StandardWatchEventKinds.ENTRY_DELETE.name())) //
+                || ts.values().equals(Lists.newArrayList( //
+                        StandardWatchEventKinds.ENTRY_CREATE.name(), //
+                        StandardWatchEventKinds.ENTRY_MODIFY.name(), //
+                        StandardWatchEventKinds.ENTRY_DELETE.name())));
         ts.cancel();
     }
 
