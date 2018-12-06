@@ -311,23 +311,23 @@ public final class Files {
 
     }
 
-    public static TailerBytesBuilder tailBytes(File file) {
-        return new TailerBytesBuilder(file);
+    public static TailBytesBuilder tailBytes(File file) {
+        return new TailBytesBuilder(file);
     }
 
-    public static TailerBytesBuilder tailBytes(String filename) {
+    public static TailBytesBuilder tailBytes(String filename) {
         return tailBytes(new File(filename));
     }
 
-    public static TailerLinesBuilder tailLines(File file) {
-        return new TailerLinesBuilder(file);
+    public static TailLinesBuilder tailLines(File file) {
+        return new TailLinesBuilder(file);
     }
 
-    public static TailerLinesBuilder tailLines(String filename) {
+    public static TailLinesBuilder tailLines(String filename) {
         return tailLines(new File(filename));
     }
 
-    public static final class TailerBytesBuilder {
+    public static final class TailBytesBuilder {
 
         private final File file;
         private long startPosition = 0;
@@ -337,7 +337,7 @@ public final class Files {
         private Flowable<?> events;
         private final List<Modifier> modifiers = new ArrayList<>();
 
-        TailerBytesBuilder(File file) {
+        TailBytesBuilder(File file) {
             this.file = file;
         }
 
@@ -349,12 +349,12 @@ public final class Files {
          *            start position
          * @return this
          */
-        public TailerBytesBuilder startPosition(long startPosition) {
+        public TailBytesBuilder startPosition(long startPosition) {
             this.startPosition = startPosition;
             return this;
         }
 
-        public TailerBytesBuilder pollingInterval(long pollingInterval, TimeUnit unit) {
+        public TailBytesBuilder pollingInterval(long pollingInterval, TimeUnit unit) {
             this.pollingIntervalMs = unit.toMillis(pollingInterval);
             return this;
         }
@@ -366,22 +366,22 @@ public final class Files {
          *            chunk size in bytes
          * @return this
          */
-        public TailerBytesBuilder chunkSize(int chunkSize) {
+        public TailBytesBuilder chunkSize(int chunkSize) {
             this.chunkSize = chunkSize;
             return this;
         }
 
-        public TailerBytesBuilder scheduler(Scheduler scheduler) {
+        public TailBytesBuilder scheduler(Scheduler scheduler) {
             this.scheduler = scheduler;
             return this;
         }
 
-        public TailerBytesBuilder events(Flowable<?> events) {
+        public TailBytesBuilder events(Flowable<?> events) {
             this.events = events;
             return this;
         }
 
-        public TailerBytesBuilder modifier(Modifier modifier) {
+        public TailBytesBuilder modifier(Modifier modifier) {
             this.modifiers.add(modifier);
             return this;
         }
@@ -400,7 +400,7 @@ public final class Files {
 
     }
 
-    public static final class TailerLinesBuilder {
+    public static final class TailLinesBuilder {
 
         private final File file;
         private long startPosition = 0;
@@ -411,7 +411,7 @@ public final class Files {
         private Flowable<?> events;
         private final List<Modifier> modifiers = new ArrayList<>();
 
-        TailerLinesBuilder(File file) {
+        TailLinesBuilder(File file) {
             this.file = file;
         }
 
@@ -423,12 +423,12 @@ public final class Files {
          *            start position
          * @return this
          */
-        public TailerLinesBuilder startPosition(long startPosition) {
+        public TailLinesBuilder startPosition(long startPosition) {
             this.startPosition = startPosition;
             return this;
         }
 
-        public TailerLinesBuilder pollingInterval(long pollingInterval, TimeUnit unit) {
+        public TailLinesBuilder pollingInterval(long pollingInterval, TimeUnit unit) {
             this.pollingIntervalMs = unit.toMillis(pollingInterval);
             return this;
         }
@@ -440,7 +440,7 @@ public final class Files {
          *            chunk size in bytes
          * @return this
          */
-        public TailerLinesBuilder chunkSize(int chunkSize) {
+        public TailLinesBuilder chunkSize(int chunkSize) {
             this.chunkSize = chunkSize;
             return this;
         }
@@ -452,7 +452,7 @@ public final class Files {
          *            charset to decode with
          * @return this
          */
-        public TailerLinesBuilder charset(Charset charset) {
+        public TailLinesBuilder charset(Charset charset) {
             this.charset = charset;
             return this;
         }
@@ -464,25 +464,25 @@ public final class Files {
          *            charset to decode the file with
          * @return this
          */
-        public TailerLinesBuilder charset(String charset) {
+        public TailLinesBuilder charset(String charset) {
             return charset(Charset.forName(charset));
         }
 
-        public TailerLinesBuilder utf8() {
+        public TailLinesBuilder utf8() {
             return charset("UTF-8");
         }
 
-        public TailerLinesBuilder scheduler(Scheduler scheduler) {
+        public TailLinesBuilder scheduler(Scheduler scheduler) {
             this.scheduler = scheduler;
             return this;
         }
 
-        public TailerLinesBuilder modifier(Modifier modifier) {
+        public TailLinesBuilder modifier(Modifier modifier) {
             this.modifiers.add(modifier);
             return this;
         }
 
-        public TailerLinesBuilder events(Flowable<?> events) {
+        public TailLinesBuilder events(Flowable<?> events) {
             this.events = events;
             return this;
         }
