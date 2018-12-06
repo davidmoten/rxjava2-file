@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
     <modelVersion>4.0.0</modelVersion>
 
@@ -13,10 +15,10 @@
     <version>0.1-SNAPSHOT</version>
 
     <name>${project.artifactId}</name>
-    <description>RxJava file observables</description>
+    <description>Utilities for watching file events and tailing files using RxJava 2.x</description>
     <packaging>jar</packaging>
 
-    <url>http://github.com/davidmoten/rxjava-file</url>
+    <url>http://github.com/davidmoten/rxjava2-file</url>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -24,7 +26,7 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <rxjava.version>1.3.8</rxjava.version>
         <rxjava2.version>2.2.4</rxjava2.version>
-        <rxjava.extras.version>0.8.0.15</rxjava.extras.version>
+        <rxjava2.extras.version>0.1.28</rxjava2.extras.version>
 
         <cobertura.version>2.7</cobertura.version>
         <checkstyle.version>3.0.0</checkstyle.version>
@@ -51,15 +53,15 @@
 
     <ciManagement>
         <system>Travis</system>
-        <url>https://travis-ci.org/davidmoten/rxjava-file</url>
+        <url>https://travis-ci.org/davidmoten/rxjava2-file</url>
     </ciManagement>
 
     <issueManagement>
         <system>GitHub</system>
-        <url>https://github.com/davidmoten/rxjava-file/issues</url>
+        <url>https://github.com/davidmoten/rxjava2-file/issues</url>
     </issueManagement>
 
-    <inceptionYear>2013</inceptionYear>
+    <inceptionYear>2018s</inceptionYear>
     <developers>
         <developer>
             <id>dave</id>
@@ -74,9 +76,9 @@
     </developers>
 
     <scm>
-        <connection>scm:git:https://github.com/davidmoten/rxjava-file.git</connection>
-        <developerConnection>scm:git:https://github.com/davidmoten/rxjava-file.git</developerConnection>
-        <url>scm:git:https://github.com/davidmoten/rxjava-file.git</url>
+        <connection>scm:git:https://github.com/davidmoten/rxjava2-file.git</connection>
+        <developerConnection>scm:git:https://github.com/davidmoten/rxjava2-file.git</developerConnection>
+        <url>scm:git:https://github.com/davidmoten/rxjava2-file.git</url>
         <tag>HEAD</tag>
     </scm>
 
@@ -89,14 +91,8 @@
         <dependency>
             <groupId>com.github.davidmoten</groupId>
             <artifactId>rxjava2-extras</artifactId>
-            <version>0.1.28</version>
+            <version>${rxjava2.extras.version}</version>
         </dependency>
-
-        <!-- <dependency> -->
-        <!-- <groupId>io.reactivex</groupId> -->
-        <!-- <artifactId>rxjava-string</artifactId> -->
-        <!-- <version>0.22.0</version> -->
-        <!-- </dependency> -->
 
         <!-- Test Dependencies -->
         <dependency>
