@@ -37,7 +37,7 @@ public class FilesTest {
     }
 
     private void checkEvents(long waitMs) throws IOException, InterruptedException {
-        System.out.println("waitMs="+ waitMs);
+        System.out.println("checkEvents waitMs="+ waitMs);
         File file = new File("target/testEvents.txt");
         file.delete();
         AtomicInteger errors = new AtomicInteger();
@@ -85,6 +85,7 @@ public class FilesTest {
     }
 
     private void checkTailFile(long waitMs) throws InterruptedException, FileNotFoundException {
+        System.out.println("checkTailFile waitMs="+ waitMs);
         File file = new File("target/lines.txt");
         file.delete();
         List<String> lines = new CopyOnWriteArrayList<>();
