@@ -100,10 +100,14 @@ public class FilesTest {
             try (PrintWriter out = new PrintWriter(file)) {
                 out.println("a");
                 out.flush();
+                //help windows know that the file has changed
+                file.setLastModified(System.currentTimeMillis());
                 Thread.sleep(waitMs);
                 ts.assertValues("a");
                 out.println("b");
                 out.flush();
+                // help windows know that the file has changed
+                file.setLastModified(System.currentTimeMillis());
                 Thread.sleep(waitMs);
                 ts.assertValues("a", "b");
             }
