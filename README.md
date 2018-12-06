@@ -71,27 +71,23 @@ To use polling instead (say every 5 seconds):
 
 ```java
 Flowable<String> items = 
-     FileFlowable.tailer()
-                   .file(new File("var/log/server.log"))
-                   .events(Flowable.interval(5, TimeUnit.SECONDS))
-                   .tailText();
+  Files.tailLines("/var/log/server.log")
+       .events(Flowable.interval(5, TimeUnit.SECONDS))
+       .build();
 ```
 
 ### Tail a binary file with NIO
 ```java
 Flowable<byte[]> items = 
-     FileFlowable.tailer()
-                   .file("/tmp/dump.bin")
-                   .tail();
+  Files.tailBytes("/tmp/dump.bin").build();
 ```
 
 ### Tail a binary file without NIO
 ```java
 Flowable<byte[]> items = 
-     FileFlowable.tailer()
-                   .file("/tmp/dump.bin")
-                   .events(Flowable.interval(5, TimeUnit.SECONDS))
-                   .tail();
+  Files.tailBytes("/tmp/dump.bin")
+       .events(Flowable.interval(5, TimeUnit.SECONDS))
+       .build();
 ```
 
 ### Stream WatchService events for a file
