@@ -15,9 +15,9 @@ Flowable utilities for files:
 * or trigger tail updates using any Observable
 * stream ```WatchEvent```s from a ```WatchService```
 * backpressure support
-* tested on Linux, OSX (let me know if you have problems on Windows)
+* tested on Linux, [OSX](#osx) (let me know if you have problems on Windows)
 
-Maven site reports TODO 
+Maven site reports are [here](https://davidmoten.github.io/rxjava2-file) including [javadoc](https://davidmoten.github.io/rxjava2-file/apidocs/index.html).
 
 ## Getting started
 Add this maven dependency to your pom.xml:
