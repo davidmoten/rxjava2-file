@@ -5,7 +5,7 @@
 [![codecov](https://codecov.io/gh/davidmoten/rxjava2-file/branch/master/graph/badge.svg)](https://codecov.io/gh/davidmoten/rxjava2-file)
 
 
-Status: *pre-alpha (migration work in progress)*
+Status: *released to Maven Central*
 
 Requires Java 8+.
 
