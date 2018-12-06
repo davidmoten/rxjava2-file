@@ -42,7 +42,7 @@ public class FilesTest {
                 .scheduler(scheduler) //
                 .pollInterval(1, TimeUnit.MINUTES) //
                 .build() //
-                .doOnNext(System.out::println) //
+                .doOnNext(x -> System.out.println(x.kind().name() + ", count="+ x.count())) //
                 .take(3) //
                 .doOnError(e -> errors.incrementAndGet()) //
                 .test();
