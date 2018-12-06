@@ -16,7 +16,8 @@ Flowable utilities for files:
 * or trigger tail updates using any Flowable
 * stream ```WatchEvent```s from a ```WatchService```
 * backpressure support
-* tested on Linux, [OSX](#osx) (let me know if you have problems on Windows)
+* tested on Linux, [OSX]([notes](#osx)), Windows ([notes](#windows))
+* Note that `WatchService` is problematic on OSX and Windows (see notes below) so your best bet is Linux!
 
 Maven site reports are [here](https://davidmoten.github.io/rxjava2-file) including [javadoc](https://davidmoten.github.io/rxjava2-file/apidocs/index.html).
 
@@ -103,3 +104,7 @@ Flowable<WatchEvent<?>> events =
 
 ## OSX
 Apparently the `WatchService` can be slow on OSX (see [here](https://stackoverflow.com/questions/9588737/is-java-7-watchservice-slow-for-anyone-else)). Note that the first example above shows how to pass a special `WatchEvent.Modifier` which some find has a beneficial effect. Without that the `WatchService` can take >10 seconds to detect changes to the file system.
+
+## Windows
+Detecting changes to files on Windows also seems problematic. See https://stackoverflow.com/questions/24306875/watchservice-in-windows-7-does-not-work.
+
