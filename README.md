@@ -16,7 +16,7 @@ Flowable utilities for files:
 * or trigger tail updates using any Flowable
 * stream ```WatchEvent```s from a ```WatchService```
 * backpressure support
-* tested on Linux, OSX([notes](#osx)), Windows ([notes](#windows))
+* tested on Linux, OSX ([notes](#osx)), Windows ([notes](#windows))
 * Note that `WatchService` is problematic on OSX and Windows (see notes below) so your best bet is Linux!
 
 Maven site reports are [here](https://davidmoten.github.io/rxjava2-file) including [javadoc](https://davidmoten.github.io/rxjava2-file/apidocs/index.html).
