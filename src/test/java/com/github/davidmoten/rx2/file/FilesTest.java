@@ -37,6 +37,7 @@ public class FilesTest {
     }
 
     private void checkEvents(long waitMs) throws IOException, InterruptedException {
+        System.out.println("waitMs="+ waitMs);
         File file = new File("target/testEvents.txt");
         file.delete();
         AtomicInteger errors = new AtomicInteger();
@@ -59,7 +60,6 @@ public class FilesTest {
         file.delete();
         Thread.sleep(waitMs);
         scheduler.advanceTimeBy(1, TimeUnit.MINUTES);
-        ts.assertNotTerminated();
         // windows detects ENTRY_MODIFY, ENTRY_DELETE
         // linux, osx detect ENTRY_DELETE
         assertTrue(ts.values().equals(Lists.newArrayList( //
@@ -100,11 +100,11 @@ public class FilesTest {
                 out.println("a");
                 out.flush();
                 Thread.sleep(waitMs);
-                ts.assertValuesOnly("a");
+                ts.assertValues("a");
                 out.println("b");
                 out.flush();
                 Thread.sleep(waitMs);
-                ts.assertValuesOnly("a", "b");
+                ts.assertValues("a", "b");
             }
         } finally {
             // stop tailing
