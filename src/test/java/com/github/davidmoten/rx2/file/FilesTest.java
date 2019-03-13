@@ -7,7 +7,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.StandardWatchEventKinds;
-import java.nio.file.WatchEvent;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
@@ -17,6 +16,8 @@ import org.junit.Test;
 
 import com.github.davidmoten.guavamini.Lists;
 
+import io.reactivex.observers.TestObserver;
+import io.reactivex.schedulers.Schedulers;
 import io.reactivex.schedulers.TestScheduler;
 import io.reactivex.subscribers.TestSubscriber;
 
@@ -42,10 +43,10 @@ public class FilesTest {
         file.delete();
         AtomicInteger errors = new AtomicInteger();
         TestScheduler scheduler = new TestScheduler();
-        TestSubscriber<String> ts = Files //
+        TestObserver<String> ts = Files //
                 .events(file) //
-                .scheduler(scheduler) //
-                .pollInterval(1, TimeUnit.MINUTES) //
+                .nonBlocking() //
+                .pollInterval(1, TimeUnit.MINUTES, scheduler) //
                 .build() //
                 .doOnNext(x -> System.out.println(x.kind().name() + ", count=" + x.count())) //
                 .map(x -> x.kind().name()).take(3) //
@@ -88,6 +89,23 @@ public class FilesTest {
             checkTailFile(MAX_WAIT_MS);
         }
     }
+    
+    @Test
+    public void testTailFileBlocking() throws InterruptedException, FileNotFoundException {
+        System.out.println("os.name=" + System.getProperty("os.name"));
+        if (System.getProperty("os.name").toLowerCase().contains("win")) {
+            System.out.println("ignoring test because Windows is problematic in detecting file change events");
+            return;
+        }
+        try {
+            checkTailFileBlocking(100);
+        } catch (AssertionError e) {
+            // fallback to 30s waits because OSX can be really slow
+            // see
+            // https://stackoverflow.com/questions/9588737/is-java-7-watchservice-slow-for-anyone-else
+            checkTailFileBlocking(MAX_WAIT_MS);
+        }
+    }
 
     private void checkTailFile(long waitMs) throws InterruptedException, FileNotFoundException {
         System.out.println("checkTailFile waitMs=" + waitMs);
@@ -96,10 +114,34 @@ public class FilesTest {
         List<String> lines = new CopyOnWriteArrayList<>();
         TestSubscriber<String> ts = Files //
                 .tailLines(file) //
+                .nonBlocking() //
                 .pollingInterval(50, TimeUnit.MILLISECONDS) //
                 .build() //
                 .doOnNext(x -> lines.add(x)) //
                 .test();
+        checkChangesAreDetected(waitMs, file, ts);
+    }
+    
+    private void checkTailFileBlocking(long waitMs) throws InterruptedException, FileNotFoundException {
+        System.out.println("checkTailFile waitMs=" + waitMs);
+        File file = new File("target/lines.txt");
+        file.delete();
+        List<String> lines = new CopyOnWriteArrayList<>();
+        TestSubscriber<String> ts = Files //
+                .tailLines(file) //
+                .blocking() //
+                .build() //
+                .subscribeOn(Schedulers.io()) //
+                .doOnNext(x -> lines.add(x)) //
+                .doOnNext(System.out::println) //
+                .test();
+        checkChangesAreDetected(waitMs, file, ts);
+        System.out.println("lines="+ lines);
+    }
+
+
+    private void checkChangesAreDetected(long waitMs, File file, TestSubscriber<String> ts)
+            throws InterruptedException, FileNotFoundException {
         try {
             Thread.sleep(waitMs);
             try (PrintWriter out = new PrintWriter(file)) {
@@ -109,6 +151,7 @@ public class FilesTest {
                 out.flush();
                 // help windows some more
                 file.getParentFile().list();
+                ts.awaitCount(1);
 
                 Thread.sleep(waitMs);
                 ts.assertValues("a");
@@ -120,6 +163,7 @@ public class FilesTest {
                 // help windows some more
                 file.getParentFile().list();
                 Thread.sleep(waitMs);
+                ts.awaitCount(2);
                 ts.assertValues("a", "b");
             }
         } finally {
@@ -128,4 +172,8 @@ public class FilesTest {
         }
     }
 
+    public static void main(String[] args) {
+        Files.tailLines(new File("/home/dxm/temp.txt")).blocking().build().forEach(System.out::println);
+    }
+    
 }
