@@ -15,7 +15,6 @@ Flowable utilities for files:
 * trigger tail updates using Java 8 and later NIO ```WatchService``` events
 * or trigger tail updates using any Flowable
 * stream ```WatchEvent```s from a ```WatchService```
-* backpressure support
 * tested on Linux, OSX ([notes](#osx)), Windows ([notes](#windows))
 * Note that `WatchService` is problematic on OSX and Windows (see notes below) so your best bet is Linux!
 
