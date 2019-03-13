@@ -42,7 +42,7 @@ mvn clean install
 
 ### Tail a text file with NIO
 
-Tail the lines of the text log file ```/var/log/server.log``` as an ```Flowable<String>```:
+Tail the lines of the text log file ```/var/log/server.log``` as a ```Flowable<String>```:
 
 ```java
 import com.github.davidmoten.rx2.file.Files;
