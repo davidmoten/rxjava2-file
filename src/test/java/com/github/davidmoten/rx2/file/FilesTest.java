@@ -16,6 +16,7 @@ import org.junit.Test;
 
 import com.github.davidmoten.guavamini.Lists;
 
+import io.reactivex.BackpressureStrategy;
 import io.reactivex.observers.TestObserver;
 import io.reactivex.schedulers.Schedulers;
 import io.reactivex.schedulers.TestScheduler;
@@ -77,7 +78,8 @@ public class FilesTest {
     public void testTailFile() throws InterruptedException, FileNotFoundException {
         System.out.println("os.name=" + System.getProperty("os.name"));
         if (System.getProperty("os.name").toLowerCase().contains("win")) {
-            System.out.println("ignoring test because Windows is problematic in detecting file change events");
+            System.out.println(
+                    "ignoring test because Windows is problematic in detecting file change events");
             return;
         }
         try {
@@ -89,12 +91,13 @@ public class FilesTest {
             checkTailFile(MAX_WAIT_MS);
         }
     }
-    
+
     @Test
     public void testTailFileBlocking() throws InterruptedException, FileNotFoundException {
         System.out.println("os.name=" + System.getProperty("os.name"));
         if (System.getProperty("os.name").toLowerCase().contains("win")) {
-            System.out.println("ignoring test because Windows is problematic in detecting file change events");
+            System.out.println(
+                    "ignoring test because Windows is problematic in detecting file change events");
             return;
         }
         try {
@@ -115,14 +118,16 @@ public class FilesTest {
         TestSubscriber<String> ts = Files //
                 .tailLines(file) //
                 .nonBlocking() //
+                .backpressureStrategy(BackpressureStrategy.BUFFER) //
                 .pollingInterval(50, TimeUnit.MILLISECONDS) //
                 .build() //
                 .doOnNext(x -> lines.add(x)) //
                 .test();
         checkChangesAreDetected(waitMs, file, ts);
     }
-    
-    private void checkTailFileBlocking(long waitMs) throws InterruptedException, FileNotFoundException {
+
+    private void checkTailFileBlocking(long waitMs)
+            throws InterruptedException, FileNotFoundException {
         System.out.println("checkTailFile waitMs=" + waitMs);
         File file = new File("target/lines.txt");
         file.delete();
@@ -136,9 +141,8 @@ public class FilesTest {
                 .doOnNext(System.out::println) //
                 .test();
         checkChangesAreDetected(waitMs, file, ts);
-        System.out.println("lines="+ lines);
+        System.out.println("lines=" + lines);
     }
-
 
     private void checkChangesAreDetected(long waitMs, File file, TestSubscriber<String> ts)
             throws InterruptedException, FileNotFoundException {
@@ -173,7 +177,8 @@ public class FilesTest {
     }
 
     public static void main(String[] args) {
-        Files.tailLines(new File("/home/dxm/temp.txt")).blocking().build().forEach(System.out::println);
+        Files.tailLines(new File("/home/dxm/temp.txt")).blocking().backpressureStrategy(BackpressureStrategy.LATEST).build()
+                .forEach(System.out::println);
     }
-    
+
 }

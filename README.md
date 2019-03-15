@@ -101,6 +101,9 @@ Flowable<WatchEvent<?>> events =
     .pollInterval(1, TimeUnit.MINUTES)
     .build();
 ```
+## Backpressure
+When `tailLines` or `tailBytes` is used a conversion to `Flowable` occurs on the `WatchEvent` stream. This is desirable to handle large amounts of data being tailed in combination with a slow processor (e.g. a network call). The default strategy is BUFFER but the strategy is specifiable in the `tailLines` and `tailBytes` builders.
+ 
 ## Non-blocking and blocking
 Two alternatives are supported by the library for getting file change events from a `WatchService`. The `nonBlocking()` builder methods configure the stream to use events via `WatchService.poll` which is a non-blocking call (but may involve some I/O?). The `blocking()` builder methods configure the stream to use events via `WatchService.take` which is a blocking call.
 
