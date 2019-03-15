@@ -68,7 +68,7 @@ Flowable<String> items =
 
 The above example uses a ```WatchService``` to generate ```WatchEvent```s to prompt rereads of the end of the file to perform the tail.
 
-To use polling instead (say every 5 seconds):
+To use polling without a `WatchService` (say every 5 seconds):
 
 ```java
 Flowable<String> items = 
@@ -95,7 +95,8 @@ Flowable<byte[]> items =
 ```java
 Flowable<WatchEvent<?>> events = 
   Files
-    .events(file)
+    .watch(file)
+    .nonBlocking()
     .scheduler(Schedulers.io())
     .pollInterval(1, TimeUnit.MINUTES)
     .build();

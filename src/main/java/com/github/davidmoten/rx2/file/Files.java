@@ -278,7 +278,7 @@ public final class Files {
             return false;
     };
 
-    public static WatchEventsBuilder events(File file) {
+    public static WatchEventsBuilder watch(File file) {
         return new WatchEventsBuilder(file);
     }
 

@@ -44,7 +44,7 @@ public class FilesTest {
         AtomicInteger errors = new AtomicInteger();
         TestScheduler scheduler = new TestScheduler();
         TestObserver<String> ts = Files //
-                .events(file) //
+                .watch(file) //
                 .nonBlocking() //
                 .pollInterval(1, TimeUnit.MINUTES, scheduler) //
                 .build() //
