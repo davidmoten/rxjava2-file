@@ -78,9 +78,10 @@ public final class Files {
      * @return Flowable of byte arrays
      */
     private static Flowable<byte[]> tailBytes(File file, long startPosition, long sampleTimeMs, int chunkSize,
-            Observable<?> events) {
+            Observable<?> events, BackpressureStrategy backpressureStrategy) {
         Preconditions.checkNotNull(file);
         return eventsToBytes(sampleModifyOrOverflowEventsOnly(events, sampleTimeMs), //
+                backpressureStrategy,
                 file, startPosition, chunkSize);
     }
 
@@ -105,11 +106,11 @@ public final class Files {
      * @return Flowable of strings
      */
     private static Flowable<String> tailLines(File file, long startPosition, int chunkSize, Charset charset,
-            Observable<?> events) {
+            Observable<?> events, BackpressureStrategy backpressureStrategy) {
         Preconditions.checkNotNull(file);
         Preconditions.checkNotNull(charset);
         Preconditions.checkNotNull(events);
-        return toLines(eventsToBytes(events, file, startPosition, chunkSize), charset);
+        return toLines(eventsToBytes(events, backpressureStrategy, file, startPosition, chunkSize), charset);
     }
 
     private static Observable<WatchEvent<?>> events(WatchService watchService, Scheduler scheduler, long intervalMs) {
@@ -504,6 +505,7 @@ public final class Files {
         private final List<Modifier> modifiers = new ArrayList<>();
         private final File file;
         private final Observable<WatchEvent<?>> events;
+        private BackpressureStrategy backpressureStrategy = BackpressureStrategy.BUFFER;
 
         public TailBytesUsingCustomEventsBuilder(File file, Observable<WatchEvent<?>> events) {
             this.file = file;
@@ -546,8 +548,13 @@ public final class Files {
             return this;
         }
         
+        public TailBytesUsingCustomEventsBuilder backpressureStrategy(BackpressureStrategy backpressureStrategy) {
+            this.backpressureStrategy  = backpressureStrategy;
+            return this;
+        }
+        
         public Flowable<byte[]> build() {
-            return Files.tailBytes(file, startPosition, sampleIntervalMs, chunkSize, events);
+            return Files.tailBytes(file, startPosition, sampleIntervalMs, chunkSize, events, backpressureStrategy);
         }
         
     }
@@ -560,6 +567,7 @@ public final class Files {
         private long pollingIntervalMs = DEFAULT_POLLING_INTERVAL_MS;
         private Scheduler scheduler = Schedulers.io();
         private final List<Modifier> modifiers = new ArrayList<>();
+        private BackpressureStrategy backpressureStrategy = BackpressureStrategy.BUFFER;
 
         TailBytesNonBlockingBuilder(File file) {
             Preconditions.checkNotNull(file);
@@ -610,9 +618,15 @@ public final class Files {
             return this;
         }
         
+        public TailBytesNonBlockingBuilder backpressureStrategy(BackpressureStrategy backpressureStrategy) {
+            this.backpressureStrategy = backpressureStrategy;
+            return this;
+        }
+        
+        
         public Flowable<byte[]> build() {
             Observable<WatchEvent<?>> events = Files.eventsNonBlocking(file, scheduler, pollingIntervalMs, ALL_KINDS, modifiers);
-            return Files.tailBytes(file, startPosition, pollingIntervalMs * 2, chunkSize, events);
+            return Files.tailBytes(file, startPosition, pollingIntervalMs * 2, chunkSize, events, backpressureStrategy);
         }
 
     }
@@ -624,6 +638,7 @@ public final class Files {
         private int chunkSize = 8192;
         private final List<Modifier> modifiers = new ArrayList<>();
         private long sampleTimeMs = DEFAULT_SAMPLE_TIME_MS;
+        private BackpressureStrategy backpressureStrategy = BackpressureStrategy.BUFFER;
 
         TailBytesBlockingBuilder(File file) {
             Preconditions.checkNotNull(file);
@@ -666,10 +681,15 @@ public final class Files {
             this.modifiers.add(modifier);
             return this;
         }
+        
+        public TailBytesBlockingBuilder backpressureStrategy(BackpressureStrategy backpressureStrategy) {
+            this.backpressureStrategy = backpressureStrategy;
+            return this;
+        }
 
         public Flowable<byte[]> build() {
             Observable<WatchEvent<?>> events = Files.eventsBlocking(file, ALL_KINDS, modifiers);
-            return Files.tailBytes(file, startPosition, sampleTimeMs, chunkSize, events);
+            return Files.tailBytes(file, startPosition, sampleTimeMs, chunkSize, events, backpressureStrategy);
         }
 
     }
@@ -718,6 +738,7 @@ public final class Files {
         private int chunkSize = 8192;
         private Charset charset = StandardCharsets.UTF_8;
         private final List<Modifier> modifiers = new ArrayList<>();
+        private BackpressureStrategy backpressureStrategy = BackpressureStrategy.BUFFER;
 
         TailLinesUsingCustomEventsBuilder(File file, Observable<WatchEvent<?>> events) {
             this.file = file;
@@ -784,8 +805,13 @@ public final class Files {
             return this;
         }
         
+        public TailLinesUsingCustomEventsBuilder backpressureStrategy(BackpressureStrategy backpressureStrategy) {
+            this.backpressureStrategy  = backpressureStrategy;
+            return this;
+        }
+        
         public Flowable<String> build() {
-            return Files.tailLines(file, startPosition, chunkSize, charset, events);
+            return Files.tailLines(file, startPosition, chunkSize, charset, events, backpressureStrategy);
         }
         
     }
@@ -799,6 +825,7 @@ public final class Files {
         private long pollingIntervalMs = DEFAULT_POLLING_INTERVAL_MS;
         private Scheduler scheduler = Schedulers.io();
         private final List<Modifier> modifiers = new ArrayList<>();
+        private BackpressureStrategy backpressureStrategy = BackpressureStrategy.BUFFER;
 
         TailLinesNonBlockingBuilder(File file) {
             Preconditions.checkNotNull(file);
@@ -877,11 +904,15 @@ public final class Files {
             this.modifiers.add(modifier);
             return this;
         }
-
+        
+        public TailLinesNonBlockingBuilder backpressureStrategy(BackpressureStrategy backpressureStrategy) {
+            this.backpressureStrategy   = backpressureStrategy;
+            return this;
+        }
         
         public Flowable<String> build() {
             Observable<WatchEvent<?>> events = Files.eventsNonBlocking(file, scheduler, pollingIntervalMs, ALL_KINDS, modifiers);
-            return Files.tailLines(file, startPosition, chunkSize, charset, events);
+            return Files.tailLines(file, startPosition, chunkSize, charset, events, backpressureStrategy);
         }
     }
 
@@ -892,6 +923,7 @@ public final class Files {
         private int chunkSize = 8192;
         private Charset charset = StandardCharsets.UTF_8;
         private final List<Modifier> modifiers = new ArrayList<>();
+        private BackpressureStrategy backpressureStrategy = BackpressureStrategy.BUFFER;
 
         TailLinesBlockingBuilder(File file) {
             Preconditions.checkNotNull(file);
@@ -957,10 +989,15 @@ public final class Files {
             this.modifiers.add(modifier);
             return this;
         }
+        
+        public TailLinesBlockingBuilder backpressureStrategy(BackpressureStrategy backpressureStrategy) {
+            this.backpressureStrategy  = backpressureStrategy;
+            return this;
+        }
 
         public Flowable<String> build() {
             Observable<WatchEvent<?>> events = Files.eventsBlocking(file, ALL_KINDS, modifiers);
-            return Files.tailLines(file, startPosition, chunkSize, charset, events);
+            return Files.tailLines(file, startPosition, chunkSize, charset, events, backpressureStrategy);
         }
     }
 
@@ -968,12 +1005,12 @@ public final class Files {
         long position;
     }
 
-    private static Flowable<byte[]> eventsToBytes(Observable<?> events, File file, long startPosition, int chunkSize) {
+    private static Flowable<byte[]> eventsToBytes(Observable<?> events, BackpressureStrategy backpressureStrategy, File file, long startPosition, int chunkSize) {
         return Flowable.defer(() -> {
             State state = new State();
             state.position = startPosition;
             // TODO allow user to specify BackpressureStrategy
-            return events.toFlowable(BackpressureStrategy.BUFFER) //
+            return events.toFlowable(backpressureStrategy) //
                     .flatMap(event -> eventToBytes(event, file, state, chunkSize));
         });
     }
