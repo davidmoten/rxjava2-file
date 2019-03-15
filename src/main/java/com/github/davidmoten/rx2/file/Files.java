@@ -40,7 +40,8 @@ import io.reactivex.schedulers.Schedulers;
  */
 public final class Files {
 
-    private static final int DEFAULT_POLLING_INTERVAL_MS = 1000;
+    private static final long DEFAULT_POLLING_INTERVAL_MS = 1000;
+    private static final long DEFAULT_SAMPLE_TIME_MS = 2 * DEFAULT_POLLING_INTERVAL_MS;
     public static final int DEFAULT_MAX_BYTES_PER_EMISSION = 8192;
     public static final List<Kind<?>> ALL_KINDS = Lists.newArrayList(StandardWatchEventKinds.ENTRY_CREATE,
             StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY,
@@ -173,7 +174,7 @@ public final class Files {
      *            kinds of watch events to register for
      * @return Flowable of watch events
      */
-    private static Observable<WatchEvent<?>> events(File file, Scheduler scheduler, long pollingIntervalMs,
+    private static Observable<WatchEvent<?>> eventsNonBlocking(File file, Scheduler scheduler, long pollingIntervalMs,
             List<Kind<?>> kinds, List<Modifier> modifiers) {
         return Observable.using(() -> watchService(file, kinds, modifiers), //
                 ws -> events(ws, scheduler, pollingIntervalMs)
@@ -483,6 +484,72 @@ public final class Files {
         public TailBytesBlockingBuilder blocking() {
             return new TailBytesBlockingBuilder(file);
         }
+        
+        /**
+         * Specifies a custom source of {@link WatchEvent}s.
+         * @param events custom source of WatchEvents.
+         * @return this
+         */
+        public TailBytesUsingCustomEventsBuilder events(Observable<WatchEvent<?>> events) {
+            return new TailBytesUsingCustomEventsBuilder(file, events);
+        }
+        
+    }
+    
+    public static final class TailBytesUsingCustomEventsBuilder {
+
+        private long startPosition = 0;
+        private int chunkSize = 8192;
+        private long sampleIntervalMs = DEFAULT_SAMPLE_TIME_MS;
+        private final List<Modifier> modifiers = new ArrayList<>();
+        private final File file;
+        private final Observable<WatchEvent<?>> events;
+
+        public TailBytesUsingCustomEventsBuilder(File file, Observable<WatchEvent<?>> events) {
+            this.file = file;
+            this.events = events;
+        }
+        
+        /**
+         * The startPosition in bytes in the file to commence the tail from. 0 = start
+         * of file. Defaults to 0.
+         * 
+         * @param startPosition
+         *            start position
+         * @return this
+         */
+        public TailBytesUsingCustomEventsBuilder startPosition(long startPosition) {
+            this.startPosition = startPosition;
+            return this;
+        }
+
+        /**
+         * Emissions from the tailed file will be no bigger than this.
+         * 
+         * @param chunkSize
+         *            chunk size in bytes
+         * @return this
+         */
+        public TailBytesUsingCustomEventsBuilder chunkSize(int chunkSize) {
+            this.chunkSize = chunkSize;
+            return this;
+        }
+
+        public TailBytesUsingCustomEventsBuilder modifier(Modifier modifier) {
+            Preconditions.checkNotNull(modifier);
+            this.modifiers.add(modifier);
+            return this;
+        }
+        
+        public TailBytesUsingCustomEventsBuilder sampleInterval(long duration, TimeUnit unit) {
+            this.sampleIntervalMs = unit.toMillis(duration);
+            return this;
+        }
+        
+        public Flowable<byte[]> build() {
+            return Files.tailBytes(file, startPosition, sampleIntervalMs, chunkSize, events);
+        }
+        
     }
 
     public static final class TailBytesNonBlockingBuilder {
@@ -492,12 +559,24 @@ public final class Files {
         private int chunkSize = 8192;
         private long pollingIntervalMs = DEFAULT_POLLING_INTERVAL_MS;
         private Scheduler scheduler = Schedulers.io();
-        private Observable<?> events;
         private final List<Modifier> modifiers = new ArrayList<>();
 
         TailBytesNonBlockingBuilder(File file) {
             Preconditions.checkNotNull(file);
             this.file = file;
+        }
+        
+        public TailBytesNonBlockingBuilder pollingInterval(long pollingInterval, TimeUnit unit, Scheduler scheduler) {
+            Preconditions.checkNotNull(unit);
+            Preconditions.checkNotNull(scheduler);
+            this.pollingIntervalMs = unit.toMillis(pollingInterval);
+            this.scheduler = scheduler;
+            return this;
+        }
+
+        public TailBytesNonBlockingBuilder pollingInterval(long pollingInterval, TimeUnit unit) {
+            Preconditions.checkNotNull(unit);
+            return pollingInterval(pollingInterval, unit, Schedulers.io());
         }
 
         /**
@@ -513,19 +592,6 @@ public final class Files {
             return this;
         }
 
-        public TailBytesNonBlockingBuilder pollingInterval(long pollingInterval, TimeUnit unit, Scheduler scheduler) {
-            Preconditions.checkNotNull(unit);
-            Preconditions.checkNotNull(scheduler);
-            this.pollingIntervalMs = unit.toMillis(pollingInterval);
-            this.scheduler = scheduler;
-            return this;
-        }
-
-        public TailBytesNonBlockingBuilder pollingInterval(long pollingInterval, TimeUnit unit) {
-            Preconditions.checkNotNull(unit);
-            return pollingInterval(pollingInterval, unit, Schedulers.io());
-        }
-
         /**
          * Emissions from the tailed file will be no bigger than this.
          * 
@@ -538,28 +604,15 @@ public final class Files {
             return this;
         }
 
-        public TailBytesNonBlockingBuilder events(Observable<?> events) {
-            Preconditions.checkNotNull(events);
-            this.events = events;
-            return this;
-        }
-
         public TailBytesNonBlockingBuilder modifier(Modifier modifier) {
             Preconditions.checkNotNull(modifier);
             this.modifiers.add(modifier);
             return this;
         }
-
-        private Observable<?> events() {
-            if (events == null) {
-                return Files.events(file, scheduler, pollingIntervalMs, ALL_KINDS, modifiers);
-            } else {
-                return events;
-            }
-        }
-
+        
         public Flowable<byte[]> build() {
-            return Files.tailBytes(file, startPosition, pollingIntervalMs * 2, chunkSize, events());
+            Observable<WatchEvent<?>> events = Files.eventsNonBlocking(file, scheduler, pollingIntervalMs, ALL_KINDS, modifiers);
+            return Files.tailBytes(file, startPosition, pollingIntervalMs * 2, chunkSize, events);
         }
 
     }
@@ -569,9 +622,8 @@ public final class Files {
         private final File file;
         private long startPosition = 0;
         private int chunkSize = 8192;
-        private Observable<?> events;
         private final List<Modifier> modifiers = new ArrayList<>();
-        private long sampleTimeMs = 1000;
+        private long sampleTimeMs = DEFAULT_SAMPLE_TIME_MS;
 
         TailBytesBlockingBuilder(File file) {
             Preconditions.checkNotNull(file);
@@ -609,28 +661,15 @@ public final class Files {
             return this;
         }
 
-        public TailBytesBlockingBuilder events(Observable<?> events) {
-            Preconditions.checkNotNull(events);
-            this.events = events;
-            return this;
-        }
-
         public TailBytesBlockingBuilder modifier(Modifier modifier) {
             Preconditions.checkNotNull(modifier);
             this.modifiers.add(modifier);
             return this;
         }
 
-        private Observable<?> events() {
-            if (events == null) {
-                return Files.eventsBlocking(file, ALL_KINDS, modifiers);
-            } else {
-                return events;
-            }
-        }
-
         public Flowable<byte[]> build() {
-            return Files.tailBytes(file, startPosition, sampleTimeMs, chunkSize, events());
+            Observable<WatchEvent<?>> events = Files.eventsBlocking(file, ALL_KINDS, modifiers);
+            return Files.tailBytes(file, startPosition, sampleTimeMs, chunkSize, events);
         }
 
     }
@@ -658,6 +697,97 @@ public final class Files {
         public TailLinesBlockingBuilder blocking() {
             return new TailLinesBlockingBuilder(file);
         }
+        
+        /**
+         * Specifies a custom source of {@link WatchEvent}s.
+         * @param events custom source of WatchEvents.
+         * @return this
+         */
+        public TailLinesUsingCustomEventsBuilder events(Observable<WatchEvent<?>> events) {
+            Preconditions.checkNotNull(events);
+            return new TailLinesUsingCustomEventsBuilder(file, events);
+        }
+    }
+    
+    public static final class TailLinesUsingCustomEventsBuilder {
+
+        private final File file;
+        private final Observable<WatchEvent<?>> events;
+        
+        private long startPosition = 0;
+        private int chunkSize = 8192;
+        private Charset charset = StandardCharsets.UTF_8;
+        private final List<Modifier> modifiers = new ArrayList<>();
+
+        TailLinesUsingCustomEventsBuilder(File file, Observable<WatchEvent<?>> events) {
+            this.file = file;
+            this.events = events;
+        }
+        
+        /**
+         * The startPosition in bytes in the file to commence the tail from. 0 = start
+         * of file. Defaults to 0.
+         * 
+         * @param startPosition
+         *            start position
+         * @return this
+         */
+        public TailLinesUsingCustomEventsBuilder startPosition(long startPosition) {
+            this.startPosition = startPosition;
+            return this;
+        }
+
+        /**
+         * Emissions from the tailed file will be no bigger than this.
+         * 
+         * @param chunkSize
+         *            chunk size in bytes
+         * @return this
+         */
+        public TailLinesUsingCustomEventsBuilder chunkSize(int chunkSize) {
+            this.chunkSize = chunkSize;
+            return this;
+        }
+
+        /**
+         * The charset of the file. Only used for tailing a text file. Default is UTF-8.
+         * 
+         * @param charset
+         *            charset to decode with
+         * @return this
+         */
+        public TailLinesUsingCustomEventsBuilder charset(Charset charset) {
+            Preconditions.checkNotNull(charset);
+            this.charset = charset;
+            return this;
+        }
+
+        /**
+         * The charset of the file. Only used for tailing a text file. Default is UTF-8.
+         * 
+         * @param charset
+         *            charset to decode the file with
+         * @return this
+         */
+        public TailLinesUsingCustomEventsBuilder charset(String charset) {
+            Preconditions.checkNotNull(charset);
+            return charset(Charset.forName(charset));
+        }
+
+        public TailLinesUsingCustomEventsBuilder utf8() {
+            return charset("UTF-8");
+        }
+
+        public TailLinesUsingCustomEventsBuilder modifier(Modifier modifier) {
+            Preconditions.checkNotNull(modifier);
+            this.modifiers.add(modifier);
+            return this;
+        }
+        
+        public Flowable<String> build() {
+            return Files.tailLines(file, startPosition, chunkSize, charset, events);
+        }
+        
     }
 
     public static final class TailLinesNonBlockingBuilder {
@@ -668,12 +798,24 @@ public final class Files {
         private Charset charset = StandardCharsets.UTF_8;
         private long pollingIntervalMs = DEFAULT_POLLING_INTERVAL_MS;
         private Scheduler scheduler = Schedulers.io();
-        private Observable<?> events;
         private final List<Modifier> modifiers = new ArrayList<>();
 
         TailLinesNonBlockingBuilder(File file) {
             Preconditions.checkNotNull(file);
             this.file = file;
+        }
+        
+        public TailLinesNonBlockingBuilder pollingInterval(long pollingInterval, TimeUnit unit, Scheduler scheduler) {
+            Preconditions.checkNotNull(unit);
+            Preconditions.checkNotNull(scheduler);
+            this.pollingIntervalMs = unit.toMillis(pollingInterval);
+            this.scheduler = scheduler;
+            return this;
+        }
+
+        public TailLinesNonBlockingBuilder pollingInterval(long pollingInterval, TimeUnit unit) {
+            Preconditions.checkNotNull(unit);
+            return pollingInterval(pollingInterval, unit, Schedulers.io());
         }
 
         /**
@@ -687,19 +829,6 @@ public final class Files {
         public TailLinesNonBlockingBuilder startPosition(long startPosition) {
             this.startPosition = startPosition;
             return this;
-        }
-
-        public TailLinesNonBlockingBuilder pollingInterval(long pollingInterval, TimeUnit unit, Scheduler scheduler) {
-            Preconditions.checkNotNull(unit);
-            Preconditions.checkNotNull(scheduler);
-            this.pollingIntervalMs = unit.toMillis(pollingInterval);
-            this.scheduler = scheduler;
-            return this;
-        }
-
-        public TailLinesNonBlockingBuilder pollingInterval(long pollingInterval, TimeUnit unit) {
-            Preconditions.checkNotNull(unit);
-            return pollingInterval(pollingInterval, unit, Schedulers.io());
         }
 
         /**
@@ -749,22 +878,10 @@ public final class Files {
             return this;
         }
 
-        public TailLinesNonBlockingBuilder events(Observable<?> events) {
-            Preconditions.checkNotNull(events);
-            this.events = events;
-            return this;
-        }
-
-        private Observable<?> events() {
-            if (events == null) {
-                return Files.events(file, scheduler, pollingIntervalMs, ALL_KINDS, modifiers);
-            } else {
-                return events;
-            }
-        }
-
+        
         public Flowable<String> build() {
-            return Files.tailLines(file, startPosition, chunkSize, charset, events());
+            Observable<WatchEvent<?>> events = Files.eventsNonBlocking(file, scheduler, pollingIntervalMs, ALL_KINDS, modifiers);
+            return Files.tailLines(file, startPosition, chunkSize, charset, events);
         }
     }
 
@@ -774,7 +891,6 @@ public final class Files {
         private long startPosition = 0;
         private int chunkSize = 8192;
         private Charset charset = StandardCharsets.UTF_8;
-        private Observable<?> events;
         private final List<Modifier> modifiers = new ArrayList<>();
 
         TailLinesBlockingBuilder(File file) {
@@ -842,22 +958,9 @@ public final class Files {
             return this;
         }
 
-        public TailLinesBlockingBuilder events(Observable<?> events) {
-            Preconditions.checkNotNull(events);
-            this.events = events;
-            return this;
-        }
-
-        private Observable<?> events() {
-            if (events == null) {
-                return Files.eventsBlocking(file, ALL_KINDS, modifiers);
-            } else {
-                return events;
-            }
-        }
-
         public Flowable<String> build() {
-            return Files.tailLines(file, startPosition, chunkSize, charset, events());
+            Observable<WatchEvent<?>> events = Files.eventsBlocking(file, ALL_KINDS, modifiers);
+            return Files.tailLines(file, startPosition, chunkSize, charset, events);
         }
     }
 

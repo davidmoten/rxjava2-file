@@ -49,8 +49,8 @@ import com.github.davidmoten.rx2.file.Files;
 
 Flowable<String> lines = 
      Files.tailLines("/var/log/server.log")
-          .pollingInterval(500, TimeUnit.MILLISECONDS)
-          .scheduler(Schedulers.io())
+          .nonBlocking()
+          .pollingInterval(500, TimeUnit.MILLISECONDS, Schedulers.io())
           // set a private sun modifier that improves OSX responsiveness
           .modifier(SensitivityWatchEventModifier.HIGH)
           .startPosition(0)
@@ -61,7 +61,7 @@ Flowable<String> lines =
 or, using defaults of startPosition 0, chunkSize 8192, charset UTF-8, scheduler `Schedulers.io()`:
 ```java
 Flowable<String> items = 
-     Files.tailLines("/var/log/server.log").build();
+     Files.tailLines("/var/log/server.log").nonBlocking().build();
 	  
 ```
 ### Tail a text file without NIO
