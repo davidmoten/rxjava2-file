@@ -80,7 +80,7 @@ Flowable<String> items =
 ### Tail a binary file with NIO
 ```java
 Flowable<byte[]> items = 
-  Files.tailBytes("/tmp/dump.bin").build();
+  Files.tailBytes("/tmp/dump.bin").blocking().build();
 ```
 
 ### Tail a binary file without NIO
@@ -101,6 +101,10 @@ Flowable<WatchEvent<?>> events =
     .pollInterval(1, TimeUnit.MINUTES)
     .build();
 ```
+## Non-blocking and blocking
+Two alternatives are supported by the library for getting file change events from a `WatchService`. The `nonBlocking()` builder methods configure the stream to use events via `WatchService.poll` which is a non-blocking call (but may involve some I/O?). The `blocking()` builder methods configure the stream to use events via `WatchService.take` which is a blocking call.
+
+So when specify `nonBlocking()` you end up with a stream that is asynchronous and `blocking()` gives you a synchronous stream (everything happens on the current thread unless of course you add asynchrony to the returned `Flowable`).
 
 ## OSX
 Apparently the `WatchService` can be slow on OSX (see [here](https://stackoverflow.com/questions/9588737/is-java-7-watchservice-slow-for-anyone-else)). Note that the first example above shows how to pass a special `WatchEvent.Modifier` which some find has a beneficial effect. Without that the `WatchService` can take >10 seconds to detect changes to the file system.
