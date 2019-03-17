@@ -49,8 +49,8 @@ import com.github.davidmoten.rx2.file.Files;
 
 Flowable<String> lines = 
      Files.tailLines("/var/log/server.log")
-          .pollingInterval(500, TimeUnit.MILLISECONDS)
-          .scheduler(Schedulers.io())
+          .nonBlocking()
+          .pollingInterval(500, TimeUnit.MILLISECONDS, Schedulers.io())
           // set a private sun modifier that improves OSX responsiveness
           .modifier(SensitivityWatchEventModifier.HIGH)
           .startPosition(0)
@@ -61,14 +61,14 @@ Flowable<String> lines =
 or, using defaults of startPosition 0, chunkSize 8192, charset UTF-8, scheduler `Schedulers.io()`:
 ```java
 Flowable<String> items = 
-     Files.tailLines("/var/log/server.log").build();
+     Files.tailLines("/var/log/server.log").nonBlocking().build();
 	  
 ```
 ### Tail a text file without NIO
 
 The above example uses a ```WatchService``` to generate ```WatchEvent```s to prompt rereads of the end of the file to perform the tail.
 
-To use polling instead (say every 5 seconds):
+To use polling without a `WatchService` (say every 5 seconds):
 
 ```java
 Flowable<String> items = 
@@ -80,7 +80,7 @@ Flowable<String> items =
 ### Tail a binary file with NIO
 ```java
 Flowable<byte[]> items = 
-  Files.tailBytes("/tmp/dump.bin").build();
+  Files.tailBytes("/tmp/dump.bin").blocking().build();
 ```
 
 ### Tail a binary file without NIO
@@ -95,11 +95,19 @@ Flowable<byte[]> items =
 ```java
 Flowable<WatchEvent<?>> events = 
   Files
-    .events(file)
+    .watch(file)
+    .nonBlocking()
     .scheduler(Schedulers.io())
     .pollInterval(1, TimeUnit.MINUTES)
     .build();
 ```
+## Backpressure
+When `tailLines` or `tailBytes` is used a conversion to `Flowable` occurs on the `WatchEvent` stream. This is desirable to handle large amounts of data being tailed in combination with a slow processor (e.g. a network call). The default strategy is BUFFER but the strategy is specifiable in the `tailLines` and `tailBytes` builders.
+ 
+## Non-blocking and blocking
+Two alternatives are supported by the library for getting file change events from a `WatchService`. The `nonBlocking()` builder methods configure the stream to use events via `WatchService.poll` which is a non-blocking call (but may involve some I/O?). The `blocking()` builder methods configure the stream to use events via `WatchService.take` which is a blocking call.
+
+So when specify `nonBlocking()` you end up with a stream that is asynchronous and `blocking()` gives you a synchronous stream (everything happens on the current thread unless of course you add asynchrony to the returned `Flowable`).
 
 ## OSX
 Apparently the `WatchService` can be slow on OSX (see [here](https://stackoverflow.com/questions/9588737/is-java-7-watchservice-slow-for-anyone-else)). Note that the first example above shows how to pass a special `WatchEvent.Modifier` which some find has a beneficial effect. Without that the `WatchService` can take >10 seconds to detect changes to the file system.
