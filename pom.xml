@@ -10,7 +10,7 @@
     </parent>
 
     <artifactId>rxjava2-file</artifactId>
-    <version>0.1.4</version>
+    <version>0.1.5-SNAPSHOT</version>
 
     <name>${project.artifactId}</name>
     <description>Utilities for watching file events and tailing files using RxJava 2.x</description>
