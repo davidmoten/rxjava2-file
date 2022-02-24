@@ -14,7 +14,7 @@
 
     <name>${project.artifactId}</name>
     <description>Utilities for watching file events and tailing files using RxJava 2.x</description>
-    <packaging>jar</packaging>
+    <packaging>bundle</packaging>
 
     <url>http://github.com/davidmoten/rxjava2-file</url>
 
@@ -129,7 +129,15 @@
                     </execution>
                 </executions>
             </plugin>
-
+            <plugin>
+                <groupId>org.apache.felix</groupId>
+                <artifactId>maven-bundle-plugin</artifactId>
+                <version>5.1.1</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <obrRepository>NONE</obrRepository>
+                </configuration>
+            </plugin>
             <plugin>
                 <artifactId>maven-site-plugin</artifactId>
                 <version>${m3.site.version}</version>
