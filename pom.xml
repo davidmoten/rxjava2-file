@@ -23,7 +23,7 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <maven.compiler.target>1.8</maven.compiler.target>
         <rxjava.version>2.2.21</rxjava.version>
-        <rxjava2.extras.version>0.2.1.1</rxjava2.extras.version>
+        <rxjava2.extras.version>0.2.2</rxjava2.extras.version>
 
         <checkstyle.version>3.2.0</checkstyle.version>
         <javadoc.version>3.4.1</javadoc.version>
